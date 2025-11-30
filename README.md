@@ -90,6 +90,7 @@ wall-catalog-app/
 │   └── pdfGenerator.js      # PDF export functionality
 ├── public/
 │   └── manifest.json        # PWA manifest
+├── jsconfig.json            # Path aliases configuration
 └── components/              # Reusable components (to be added)
 ```
 
@@ -142,6 +143,7 @@ The app works offline and can be installed on mobile devices:
 - [x] User authentication
 - [x] Contact form
 - [x] PWA support
+- [x] Path aliases configured
 - [ ] Admin dashboard
 - [ ] Product management UI
 - [ ] Enquiry management
