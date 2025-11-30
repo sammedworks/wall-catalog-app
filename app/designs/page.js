@@ -26,16 +26,19 @@ export default function DesignsPage() {
   const loadDesigns = async () => {
     setLoading(true);
     try {
+      // Load all active products (not filtered by room for now)
       const { data, error } = await supabase
         .from('products')
         .select('*')
         .eq('is_active', true)
+        .order('created_at', { ascending: false })
         .limit(6);
 
       if (error) throw error;
       setDesigns(data || []);
     } catch (error) {
       console.error('Error loading designs:', error);
+      setDesigns([]);
     } finally {
       setLoading(false);
     }
@@ -117,7 +120,7 @@ export default function DesignsPage() {
               </div>
               <div>
                 <h1 className="text-xl font-bold text-gray-900">{selectedRoom.name} Designs</h1>
-                <p className="text-xs text-gray-600">6 premium designs</p>
+                <p className="text-xs text-gray-600">{designs.length} premium designs</p>
               </div>
             </div>
           </div>
@@ -128,9 +131,12 @@ export default function DesignsPage() {
       <div className="max-w-7xl mx-auto px-4 py-8">
         {loading ? (
           <div className="flex items-center justify-center h-64">
-            <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600"></div>
+            <div className="text-center">
+              <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto mb-4"></div>
+              <p className="text-gray-600">Loading designs...</p>
+            </div>
           </div>
-        ) : (
+        ) : designs.length > 0 ? (
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
             {designs.map((design) => (
               <div
@@ -161,14 +167,14 @@ export default function DesignsPage() {
                       {design.name}
                     </h3>
                     <p className="text-sm text-gray-600 line-clamp-2">
-                      {design.description || 'Premium wall panel design with modern aesthetics'}
+                      {design.description || 'Premium wall panel design with modern aesthetics and superior quality materials'}
                     </p>
                   </div>
 
                   <div className="flex items-center gap-4 text-sm">
                     <div className="flex items-center gap-2">
                       <span className="w-3 h-3 bg-blue-500 rounded-full"></span>
-                      <span className="text-gray-700 font-medium">{design.finish_type}</span>
+                      <span className="text-gray-700 font-medium">{design.finish_type || 'Premium'}</span>
                     </div>
                     <div className="text-gray-500">•</div>
                     <div className="text-gray-700 font-semibold">
@@ -188,17 +194,14 @@ export default function DesignsPage() {
               </div>
             ))}
           </div>
-        )}
-
-        {/* No Designs Message */}
-        {!loading && designs.length === 0 && (
+        ) : (
           <div className="text-center py-16">
             <div className="text-6xl mb-4">🎨</div>
             <h3 className="text-2xl font-bold text-gray-900 mb-2">
               No designs available yet
             </h3>
             <p className="text-gray-600 mb-6">
-              We're adding new designs soon. Check back later!
+              We're adding new designs for {selectedRoom.name} soon. Check back later!
             </p>
             <button
               onClick={() => setSelectedRoom(null)}
