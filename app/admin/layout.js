@@ -15,27 +15,32 @@ export default function AdminLayout({ children }) {
   }, []);
 
   const checkAuth = async () => {
-    const { data: { user } } = await supabase.auth.getUser();
-    
-    if (!user) {
+    try {
+      const { data: { user } } = await supabase.auth.getUser();
+      
+      if (!user) {
+        router.push('/login');
+        return;
+      }
+
+      // Check if user is admin
+      const { data: profile } = await supabase
+        .from('user_profiles')
+        .select('role')
+        .eq('id', user.id)
+        .single();
+
+      if (!profile || profile.role !== 'admin') {
+        router.push('/');
+        return;
+      }
+
+      setUser(user);
+      setLoading(false);
+    } catch (error) {
+      console.error('Auth error:', error);
       router.push('/login');
-      return;
     }
-
-    // Check if user is admin
-    const { data: profile } = await supabase
-      .from('user_profiles')
-      .select('role')
-      .eq('id', user.id)
-      .single();
-
-    if (!profile || profile.role !== 'admin') {
-      router.push('/');
-      return;
-    }
-
-    setUser(user);
-    setLoading(false);
   };
 
   const handleLogout = async () => {
