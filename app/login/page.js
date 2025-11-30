@@ -1,5 +1,5 @@
 'use client';
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { signIn, supabase } from '@/lib/supabase';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
@@ -15,7 +15,7 @@ export default function LoginPage() {
   const [connectionStatus, setConnectionStatus] = useState('checking');
 
   // Check Supabase connection on mount
-  useState(() => {
+  useEffect(() => {
     checkConnection();
   }, []);
 
