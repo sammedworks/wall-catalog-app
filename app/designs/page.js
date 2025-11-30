@@ -26,7 +26,6 @@ export default function DesignsPage() {
   const loadDesigns = async () => {
     setLoading(true);
     try {
-      // Load all active products (not filtered by room for now)
       const { data, error } = await supabase
         .from('products')
         .select('*')
@@ -48,7 +47,6 @@ export default function DesignsPage() {
   if (!selectedRoom) {
     return (
       <div className="min-h-screen bg-gradient-to-br from-blue-50 via-white to-purple-50">
-        {/* Header */}
         <header className="bg-white shadow-md sticky top-0 z-50">
           <div className="max-w-7xl mx-auto px-4 py-4">
             <div className="flex items-center gap-4">
@@ -63,7 +61,6 @@ export default function DesignsPage() {
           </div>
         </header>
 
-        {/* Room Selection */}
         <div className="max-w-7xl mx-auto px-4 py-8">
           <div className="text-center mb-12">
             <h2 className="text-3xl md:text-4xl font-bold text-gray-900 mb-4">
@@ -104,7 +101,6 @@ export default function DesignsPage() {
   // Step 2: Design Grid
   return (
     <div className="min-h-screen bg-gradient-to-br from-blue-50 via-white to-purple-50">
-      {/* Header */}
       <header className="bg-white shadow-md sticky top-0 z-50">
         <div className="max-w-7xl mx-auto px-4 py-4">
           <div className="flex items-center gap-4">
@@ -127,7 +123,6 @@ export default function DesignsPage() {
         </div>
       </header>
 
-      {/* Designs Grid */}
       <div className="max-w-7xl mx-auto px-4 py-8">
         {loading ? (
           <div className="flex items-center justify-center h-64">
@@ -143,7 +138,6 @@ export default function DesignsPage() {
                 key={design.id}
                 className="bg-white rounded-2xl shadow-lg hover:shadow-2xl transition-all duration-300 overflow-hidden group"
               >
-                {/* Large Image Preview */}
                 <div className="relative h-64 bg-gray-100 overflow-hidden">
                   <img
                     src={design.image_url || 'https://via.placeholder.com/400x300?text=Design+Preview'}
@@ -160,7 +154,6 @@ export default function DesignsPage() {
                   </div>
                 </div>
 
-                {/* Design Info */}
                 <div className="p-6 space-y-4">
                   <div>
                     <h3 className="text-xl font-bold text-gray-900 mb-2">
@@ -182,9 +175,8 @@ export default function DesignsPage() {
                     </div>
                   </div>
 
-                  {/* View Details Button */}
                   <Link
-                    href={`/designs/${design.id}`}
+                    href={`/design-detail?id=${design.id}`}
                     className="flex items-center justify-center gap-2 w-full py-3 bg-gradient-to-r from-blue-600 to-blue-700 text-white rounded-xl font-semibold hover:from-blue-700 hover:to-blue-800 transition-all shadow-lg hover:shadow-xl"
                   >
                     <Eye className="w-5 h-5" />
