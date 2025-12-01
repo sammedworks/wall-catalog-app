@@ -2,15 +2,9 @@
 import { useState, useEffect } from 'react';
 import { supabase } from '@/lib/supabase';
 import Link from 'next/link';
-import { ArrowLeft, Heart, Search } from 'lucide-react';
+import { ArrowLeft, Heart, Search, ChevronLeft, ChevronRight } from 'lucide-react';
 
 const CATEGORIES = [
-  { 
-    id: 'living-room', 
-    name: 'Living Room', 
-    image: 'https://images.unsplash.com/photo-1586023492125-27b2c045efd7?w=400&h=300&fit=crop',
-    gradient: 'from-amber-50 to-orange-50'
-  },
   { 
     id: 'tv-unit', 
     name: 'TV Unit', 
@@ -18,52 +12,121 @@ const CATEGORIES = [
     gradient: 'from-blue-50 to-indigo-50'
   },
   { 
+    id: 'living-room', 
+    name: 'Living Room', 
+    image: 'https://images.unsplash.com/photo-1586023492125-27b2c045efd7?w=400&h=300&fit=crop',
+    gradient: 'from-amber-50 to-orange-50'
+  },
+  { 
     id: 'bedroom', 
     name: 'Bedroom', 
     image: 'https://images.unsplash.com/photo-1616594039964-ae9021a400a0?w=400&h=300&fit=crop',
     gradient: 'from-purple-50 to-pink-50'
   },
-];
-
-const MATERIALS = [
-  { id: 'marble', name: 'Marble', color: '#F5F5F5', textColor: '#374151' },
-  { id: 'wooden', name: 'Wooden', color: '#8B4513', textColor: '#FFFFFF' },
-  { id: 'fabric', name: 'Fabric', color: '#E8DCC4', textColor: '#374151' },
-  { id: 'waffle', name: 'Waffle', color: '#D4A574', textColor: '#FFFFFF' },
-  { id: 'grey', name: 'Grey', color: '#9CA3AF', textColor: '#FFFFFF' },
-  { id: 'glass', name: 'Glass', color: '#DBEAFE', textColor: '#374151' },
-];
-
-const FILTER_CHIPS = [
-  { id: 'bedroom', label: 'Bedroom' },
-  { id: 'living-room', label: 'Living room' },
-  { id: 'tv-unit', label: 'TV unit' },
-  { id: 'price-low', label: '₹ Low to High' },
-  { id: 'price-high', label: '₹ High to Low' },
-  { id: 'popular', label: 'Most Popular' },
+  { 
+    id: 'entrance', 
+    name: 'Entrance', 
+    image: 'https://images.unsplash.com/photo-1600210492486-724fe5c67fb0?w=400&h=300&fit=crop',
+    gradient: 'from-green-50 to-emerald-50'
+  },
+  { 
+    id: 'study', 
+    name: 'Study', 
+    image: 'https://images.unsplash.com/photo-1524758631624-e2822e304c36?w=400&h=300&fit=crop',
+    gradient: 'from-indigo-50 to-blue-50'
+  },
+  { 
+    id: 'mandir', 
+    name: 'Mandir', 
+    image: 'https://images.unsplash.com/photo-1604709177225-055f99402ea3?w=400&h=300&fit=crop',
+    gradient: 'from-rose-50 to-pink-50'
+  },
 ];
 
 export default function BrowsePage() {
   const [designs, setDesigns] = useState([]);
+  const [materials, setMaterials] = useState([]);
+  const [tags, setTags] = useState([]);
   const [loading, setLoading] = useState(true);
   const [selectedMaterial, setSelectedMaterial] = useState(null);
-  const [selectedFilters, setSelectedFilters] = useState([]);
+  const [selectedCategory, setSelectedCategory] = useState(null);
+  const [selectedTags, setSelectedTags] = useState([]);
   const [favorites, setFavorites] = useState([]);
+  const [imageIndexes, setImageIndexes] = useState({});
+  const [searchQuery, setSearchQuery] = useState('');
 
   useEffect(() => {
+    loadMaterials();
+    loadTags();
     loadDesigns();
     loadFavorites();
   }, []);
 
-  const loadDesigns = async () => {
+  useEffect(() => {
+    loadDesigns();
+  }, [selectedMaterial, selectedCategory, selectedTags, searchQuery]);
+
+  const loadMaterials = async () => {
     try {
       const { data, error } = await supabase
-        .from('products')
+        .from('materials')
         .select('*')
         .eq('is_active', true)
-        .order('created_at', { ascending: false });
+        .order('display_order');
 
       if (error) throw error;
+      setMaterials(data || []);
+    } catch (error) {
+      console.error('Error loading materials:', error);
+    }
+  };
+
+  const loadTags = async () => {
+    try {
+      const { data, error } = await supabase
+        .from('design_tags')
+        .select('*')
+        .eq('is_active', true)
+        .order('display_order');
+
+      if (error) throw error;
+      setTags(data || []);
+    } catch (error) {
+      console.error('Error loading tags:', error);
+    }
+  };
+
+  const loadDesigns = async () => {
+    setLoading(true);
+    try {
+      let query = supabase
+        .from('products')
+        .select('*')
+        .eq('is_active', true);
+
+      // Filter by category
+      if (selectedCategory) {
+        query = query.eq('space_category', selectedCategory);
+      }
+
+      // Filter by search
+      if (searchQuery) {
+        query = query.ilike('name', `%${searchQuery}%`);
+      }
+
+      query = query.order('created_at', { ascending: false });
+
+      const { data, error } = await query;
+
+      if (error) throw error;
+
+      // Initialize image indexes
+      const indexes = {};
+      (data || []).forEach(design => {
+        indexes[design.id] = 0;
+      });
+      setImageIndexes(indexes);
+
       setDesigns(data || []);
     } catch (error) {
       console.error('Error loading designs:', error);
@@ -88,12 +151,40 @@ export default function BrowsePage() {
     localStorage.setItem('favorites', JSON.stringify(newFavorites));
   };
 
-  const toggleFilter = (filterId) => {
-    if (selectedFilters.includes(filterId)) {
-      setSelectedFilters(selectedFilters.filter(id => id !== filterId));
+  const toggleTag = (tagId) => {
+    if (selectedTags.includes(tagId)) {
+      setSelectedTags(selectedTags.filter(id => id !== tagId));
     } else {
-      setSelectedFilters([...selectedFilters, filterId]);
+      setSelectedTags([...selectedTags, tagId]);
     }
+  };
+
+  const nextImage = (designId, e) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setImageIndexes(prev => ({
+      ...prev,
+      [designId]: prev[designId] === 0 ? 1 : 0
+    }));
+  };
+
+  const prevImage = (designId, e) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setImageIndexes(prev => ({
+      ...prev,
+      [designId]: prev[designId] === 0 ? 1 : 0
+    }));
+  };
+
+  const getDesignImages = (design) => {
+    const images = [];
+    if (design.image_url) images.push(design.image_url);
+    if (design.image_url_2) images.push(design.image_url_2);
+    if (images.length === 0) {
+      images.push('https://via.placeholder.com/400x300?text=Design');
+    }
+    return images;
   };
 
   return (
@@ -121,6 +212,8 @@ export default function BrowsePage() {
                 <input
                   type="text"
                   placeholder="Search designs..."
+                  value={searchQuery}
+                  onChange={(e) => setSearchQuery(e.target.value)}
                   className="w-full pl-12 pr-4 py-3 bg-gray-50 border border-gray-200 rounded-2xl focus:outline-none focus:ring-2 focus:ring-gray-900 focus:border-transparent text-sm"
                   style={{ fontFamily: 'SF Pro Display, Inter, system-ui, sans-serif' }}
                 />
@@ -128,29 +221,28 @@ export default function BrowsePage() {
             </div>
 
             <div className="flex items-center gap-3">
-              <button className="px-5 py-2.5 text-sm font-medium text-gray-700 hover:bg-gray-50 rounded-xl transition-all">
-                Favorites
-              </button>
-              <button className="px-5 py-2.5 text-sm font-medium text-white bg-gray-900 hover:bg-gray-800 rounded-xl transition-all">
+              <Link href="/quote" className="px-5 py-2.5 text-sm font-medium text-white bg-gray-900 hover:bg-gray-800 rounded-xl transition-all">
                 Get Quote
-              </button>
+              </Link>
             </div>
           </div>
         </div>
       </header>
 
       <div className="max-w-[1400px] mx-auto px-8 py-8">
-        {/* Top Section - Category Cards */}
+        {/* Top Section - Category Cards (6 areas) */}
         <section className="mb-12">
           <h2 className="text-xl font-semibold text-gray-900 mb-6" style={{ fontFamily: 'SF Pro Display, Inter, system-ui, sans-serif' }}>
             Explore by Space
           </h2>
-          <div className="grid grid-cols-3 gap-6">
+          <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4">
             {CATEGORIES.map((category) => (
-              <Link
+              <button
                 key={category.id}
-                href={`/browse?category=${category.id}`}
-                className="group relative overflow-hidden rounded-3xl shadow-sm hover:shadow-xl transition-all duration-300"
+                onClick={() => setSelectedCategory(selectedCategory === category.id ? null : category.id)}
+                className={`group relative overflow-hidden rounded-2xl shadow-sm hover:shadow-xl transition-all duration-300 ${
+                  selectedCategory === category.id ? 'ring-2 ring-gray-900 ring-offset-2' : ''
+                }`}
               >
                 <div className="aspect-[4/3] relative">
                   <img
@@ -163,70 +255,74 @@ export default function BrowsePage() {
                   />
                   <div className={`absolute inset-0 bg-gradient-to-t ${category.gradient} opacity-0 group-hover:opacity-20 transition-opacity duration-300`}></div>
                 </div>
-                <div className="absolute bottom-0 left-0 right-0 p-6 bg-gradient-to-t from-black/60 to-transparent">
-                  <h3 className="text-xl font-semibold text-white" style={{ fontFamily: 'SF Pro Display, Inter, system-ui, sans-serif' }}>
+                <div className="absolute bottom-0 left-0 right-0 p-3 bg-gradient-to-t from-black/60 to-transparent">
+                  <h3 className="text-sm font-semibold text-white text-center" style={{ fontFamily: 'SF Pro Display, Inter, system-ui, sans-serif' }}>
                     {category.name}
                   </h3>
                 </div>
-              </Link>
+              </button>
             ))}
           </div>
         </section>
 
-        {/* Middle Section - Material Swatches & Filters */}
+        {/* Middle Section - Material Swatches & Tags */}
         <section className="mb-10">
           <h2 className="text-xl font-semibold text-gray-900 mb-6" style={{ fontFamily: 'SF Pro Display, Inter, system-ui, sans-serif' }}>
             Explore All Looks
           </h2>
           
           {/* Material Swatches */}
-          <div className="flex items-center gap-4 mb-6 overflow-x-auto pb-2">
-            {MATERIALS.map((material) => (
-              <button
-                key={material.id}
-                onClick={() => setSelectedMaterial(material.id === selectedMaterial ? null : material.id)}
-                className={`flex-shrink-0 group transition-all duration-200 ${
-                  selectedMaterial === material.id ? 'scale-105' : ''
-                }`}
-              >
-                <div className="flex flex-col items-center gap-2">
-                  <div
-                    className={`w-16 h-16 rounded-2xl shadow-md group-hover:shadow-lg transition-all duration-200 ${
-                      selectedMaterial === material.id ? 'ring-3 ring-gray-900 ring-offset-2' : ''
-                    }`}
-                    style={{ backgroundColor: material.color }}
-                  ></div>
-                  <span 
-                    className="text-xs font-medium text-gray-700"
-                    style={{ fontFamily: 'SF Pro Display, Inter, system-ui, sans-serif' }}
-                  >
-                    {material.name}
-                  </span>
-                </div>
-              </button>
-            ))}
-          </div>
+          {materials.length > 0 && (
+            <div className="flex items-center gap-4 mb-6 overflow-x-auto pb-2">
+              {materials.map((material) => (
+                <button
+                  key={material.id}
+                  onClick={() => setSelectedMaterial(material.id === selectedMaterial ? null : material.id)}
+                  className={`flex-shrink-0 group transition-all duration-200 ${
+                    selectedMaterial === material.id ? 'scale-105' : ''
+                  }`}
+                >
+                  <div className="flex flex-col items-center gap-2">
+                    <div
+                      className={`w-16 h-16 rounded-2xl shadow-md group-hover:shadow-lg transition-all duration-200 ${
+                        selectedMaterial === material.id ? 'ring-3 ring-gray-900 ring-offset-2' : ''
+                      }`}
+                      style={{ backgroundColor: material.color_code }}
+                    ></div>
+                    <span 
+                      className="text-xs font-medium text-gray-700"
+                      style={{ fontFamily: 'SF Pro Display, Inter, system-ui, sans-serif' }}
+                    >
+                      {material.name}
+                    </span>
+                  </div>
+                </button>
+              ))}
+            </div>
+          )}
 
-          {/* Filter Chips */}
-          <div className="flex items-center gap-3 flex-wrap">
-            {FILTER_CHIPS.map((chip) => (
-              <button
-                key={chip.id}
-                onClick={() => toggleFilter(chip.id)}
-                className={`px-5 py-2.5 rounded-full text-sm font-medium transition-all duration-200 ${
-                  selectedFilters.includes(chip.id)
-                    ? 'bg-gray-900 text-white shadow-md'
-                    : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
-                }`}
-                style={{ fontFamily: 'SF Pro Display, Inter, system-ui, sans-serif' }}
-              >
-                {chip.label}
-              </button>
-            ))}
-          </div>
+          {/* Tag Chips */}
+          {tags.length > 0 && (
+            <div className="flex items-center gap-3 flex-wrap">
+              {tags.map((tag) => (
+                <button
+                  key={tag.id}
+                  onClick={() => toggleTag(tag.id)}
+                  className={`px-5 py-2.5 rounded-full text-sm font-medium transition-all duration-200 ${
+                    selectedTags.includes(tag.id)
+                      ? 'bg-gray-900 text-white shadow-md'
+                      : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+                  }`}
+                  style={{ fontFamily: 'SF Pro Display, Inter, system-ui, sans-serif' }}
+                >
+                  {tag.name}
+                </button>
+              ))}
+            </div>
+          )}
         </section>
 
-        {/* Bottom Section - Design Cards Grid */}
+        {/* Bottom Section - Design Cards Grid with Two-Image Slider */}
         <section>
           <div className="flex items-center justify-between mb-6">
             <h2 className="text-xl font-semibold text-gray-900" style={{ fontFamily: 'SF Pro Display, Inter, system-ui, sans-serif' }}>
@@ -246,70 +342,108 @@ export default function BrowsePage() {
             </div>
           ) : (
             <div className="grid grid-cols-3 gap-6">
-              {designs.map((design) => (
-                <div
-                  key={design.id}
-                  className="group bg-white rounded-3xl overflow-hidden shadow-sm hover:shadow-xl transition-all duration-300"
-                >
-                  {/* Image */}
-                  <Link href={`/design-detail?id=${design.id}`} className="block relative aspect-[4/3] overflow-hidden bg-gray-50">
-                    <img
-                      src={design.image_url || 'https://via.placeholder.com/400x300?text=Design'}
-                      alt={design.name}
-                      className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500"
-                      onError={(e) => {
-                        e.target.src = 'https://via.placeholder.com/400x300?text=Design';
-                      }}
-                    />
-                    
-                    {/* Favorite Button */}
-                    <button
-                      onClick={(e) => {
-                        e.preventDefault();
-                        toggleFavorite(design.id);
-                      }}
-                      className="absolute top-4 right-4 w-10 h-10 bg-white/90 backdrop-blur-sm rounded-full flex items-center justify-center shadow-md hover:bg-white transition-all duration-200 group/fav"
-                    >
-                      <Heart
-                        className={`w-5 h-5 transition-all duration-200 ${
-                          favorites.includes(design.id)
-                            ? 'fill-red-500 text-red-500'
-                            : 'text-gray-600 group-hover/fav:text-red-500'
-                        }`}
-                      />
-                    </button>
-                  </Link>
+              {designs.map((design) => {
+                const images = getDesignImages(design);
+                const currentIndex = imageIndexes[design.id] || 0;
+                const hasMultipleImages = images.length > 1;
 
-                  {/* Content */}
-                  <div className="p-5">
-                    <Link href={`/design-detail?id=${design.id}`}>
-                      <h3 
-                        className="text-base font-semibold text-gray-900 mb-2 line-clamp-1 group-hover:text-gray-700 transition-colors"
-                        style={{ fontFamily: 'SF Pro Display, Inter, system-ui, sans-serif' }}
+                return (
+                  <div
+                    key={design.id}
+                    className="group bg-white rounded-3xl overflow-hidden shadow-sm hover:shadow-xl transition-all duration-300"
+                  >
+                    {/* Image Slider */}
+                    <div className="relative aspect-[4/3] overflow-hidden bg-gray-50">
+                      <Link href={`/design-detail?id=${design.id}`}>
+                        <img
+                          src={images[currentIndex]}
+                          alt={design.name}
+                          className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500"
+                          onError={(e) => {
+                            e.target.src = 'https://via.placeholder.com/400x300?text=Design';
+                          }}
+                        />
+                      </Link>
+                      
+                      {/* Image Navigation */}
+                      {hasMultipleImages && (
+                        <>
+                          <button
+                            onClick={(e) => prevImage(design.id, e)}
+                            className="absolute left-2 top-1/2 -translate-y-1/2 w-8 h-8 bg-white/90 backdrop-blur-sm rounded-full flex items-center justify-center shadow-md hover:bg-white transition-all opacity-0 group-hover:opacity-100"
+                          >
+                            <ChevronLeft className="w-5 h-5 text-gray-700" />
+                          </button>
+                          <button
+                            onClick={(e) => nextImage(design.id, e)}
+                            className="absolute right-2 top-1/2 -translate-y-1/2 w-8 h-8 bg-white/90 backdrop-blur-sm rounded-full flex items-center justify-center shadow-md hover:bg-white transition-all opacity-0 group-hover:opacity-100"
+                          >
+                            <ChevronRight className="w-5 h-5 text-gray-700" />
+                          </button>
+
+                          {/* Image Indicators */}
+                          <div className="absolute bottom-4 left-1/2 -translate-x-1/2 flex gap-2">
+                            {images.map((_, idx) => (
+                              <div
+                                key={idx}
+                                className={`w-2 h-2 rounded-full transition-all ${
+                                  idx === currentIndex ? 'bg-white w-6' : 'bg-white/50'
+                                }`}
+                              />
+                            ))}
+                          </div>
+                        </>
+                      )}
+
+                      {/* Favorite Button */}
+                      <button
+                        onClick={(e) => {
+                          e.preventDefault();
+                          toggleFavorite(design.id);
+                        }}
+                        className="absolute top-4 right-4 w-10 h-10 bg-white/90 backdrop-blur-sm rounded-full flex items-center justify-center shadow-md hover:bg-white transition-all duration-200 group/fav"
                       >
-                        {design.name}
-                      </h3>
-                      <p className="text-sm text-gray-500 mb-3 line-clamp-2">
-                        {design.description || 'Premium interior design solution'}
-                      </p>
-                      <div className="flex items-center justify-between">
-                        <div>
-                          <p className="text-xs text-gray-400 mb-0.5">Starting from</p>
-                          <p className="text-lg font-semibold text-gray-900">
-                            ₹{design.price_per_sqft}
-                            <span className="text-sm font-normal text-gray-500">/sq ft</span>
-                          </p>
+                        <Heart
+                          className={`w-5 h-5 transition-all duration-200 ${
+                            favorites.includes(design.id)
+                              ? 'fill-red-500 text-red-500'
+                              : 'text-gray-600 group-hover/fav:text-red-500'
+                          }`}
+                        />
+                      </button>
+                    </div>
+
+                    {/* Content */}
+                    <div className="p-5">
+                      <Link href={`/design-detail?id=${design.id}`}>
+                        <h3 
+                          className="text-base font-semibold text-gray-900 mb-2 line-clamp-1 group-hover:text-gray-700 transition-colors"
+                          style={{ fontFamily: 'SF Pro Display, Inter, system-ui, sans-serif' }}
+                        >
+                          {design.name}
+                        </h3>
+                        <p className="text-sm text-gray-500 mb-3 line-clamp-2">
+                          {design.description || 'Premium interior design solution'}
+                        </p>
+                        <div className="flex items-center justify-between">
+                          <div>
+                            <p className="text-xs text-gray-400 mb-0.5">Starting from</p>
+                            <p className="text-lg font-semibold text-gray-900">
+                              ₹{design.price_per_sqft}
+                              <span className="text-sm font-normal text-gray-500">/sq ft</span>
+                            </p>
+                          </div>
+                          <div className="px-3 py-1.5 bg-gray-50 rounded-lg">
+                            <p className="text-xs font-medium text-gray-600">
+                              {design.finish_type || 'Premium'}
+                            </p>
+                          </div>
                         </div>
-                        <div className="px-3 py-1.5 bg-gray-50 rounded-lg">
-                          <p className="text-xs font-medium text-gray-600">
-                            {design.finish_type || 'Premium'}
-                          </p>
-                        </div>
-                      </div>
-                    </Link>
+                      </Link>
+                    </div>
                   </div>
-                </div>
-              ))}
+                );
+              })}
             </div>
           )}
 
@@ -320,9 +454,20 @@ export default function BrowsePage() {
               <h3 className="text-xl font-semibold text-gray-900 mb-2">
                 No designs found
               </h3>
-              <p className="text-gray-500">
+              <p className="text-gray-500 mb-4">
                 Try adjusting your filters or check back later
               </p>
+              <button
+                onClick={() => {
+                  setSelectedCategory(null);
+                  setSelectedMaterial(null);
+                  setSelectedTags([]);
+                  setSearchQuery('');
+                }}
+                className="px-6 py-3 bg-gray-900 text-white rounded-xl font-semibold hover:bg-gray-800 transition-all"
+              >
+                Clear Filters
+              </button>
             </div>
           )}
         </section>
