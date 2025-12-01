@@ -2,20 +2,22 @@
 import { useState, useEffect } from 'react';
 import { supabase } from '@/lib/supabase';
 import Link from 'next/link';
-import { ArrowLeft, Eye } from 'lucide-react';
+import { ArrowLeft, Eye, ChevronLeft, ChevronRight } from 'lucide-react';
 
 const ROOM_AREAS = [
-  { id: 'tv-wall', name: 'TV Wall', icon: '📺', color: 'from-blue-500 to-blue-600' },
-  { id: 'mandir', name: 'Mandir', icon: '🕉️', color: 'from-orange-500 to-orange-600' },
+  { id: 'tv-unit', name: 'TV Unit', icon: '📺', color: 'from-blue-500 to-blue-600' },
+  { id: 'living-room', name: 'Living Room', icon: '🛋️', color: 'from-amber-500 to-orange-600' },
   { id: 'bedroom', name: 'Bedroom', icon: '🛏️', color: 'from-purple-500 to-purple-600' },
   { id: 'entrance', name: 'Entrance', icon: '🚪', color: 'from-green-500 to-green-600' },
   { id: 'study', name: 'Study', icon: '📚', color: 'from-indigo-500 to-indigo-600' },
+  { id: 'mandir', name: 'Mandir', icon: '🕉️', color: 'from-rose-500 to-pink-600' },
 ];
 
 export default function DesignsPage() {
   const [selectedRoom, setSelectedRoom] = useState(null);
   const [designs, setDesigns] = useState([]);
   const [loading, setLoading] = useState(false);
+  const [imageIndexes, setImageIndexes] = useState({});
 
   useEffect(() => {
     if (selectedRoom) {
@@ -30,10 +32,17 @@ export default function DesignsPage() {
         .from('products')
         .select('*')
         .eq('is_active', true)
-        .order('created_at', { ascending: false })
-        .limit(6);
+        .eq('space_category', selectedRoom.id)
+        .order('created_at', { ascending: false });
 
       if (error) throw error;
+      
+      // Initialize image indexes for slider
+      const indexes = {};
+      (data || []).forEach(design => {
+        indexes[design.id] = 0;
+      });
+      setImageIndexes(indexes);
       setDesigns(data || []);
     } catch (error) {
       console.error('Error loading designs:', error);
@@ -43,10 +52,39 @@ export default function DesignsPage() {
     }
   };
 
+  const nextImage = (designId, e) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setImageIndexes(prev => ({
+      ...prev,
+      [designId]: prev[designId] === 0 ? 1 : 0
+    }));
+  };
+
+  const prevImage = (designId, e) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setImageIndexes(prev => ({
+      ...prev,
+      [designId]: prev[designId] === 0 ? 1 : 0
+    }));
+  };
+
+  const getDesignImages = (design) => {
+    const images = [];
+    if (design.image_url) images.push(design.image_url);
+    if (design.image_url_2) images.push(design.image_url_2);
+    if (images.length === 0) {
+      images.push('https://via.placeholder.com/400x300?text=Design+Preview');
+    }
+    return images;
+  };
+
   // Step 1: Room Selection
   if (!selectedRoom) {
     return (
       <div className="min-h-screen bg-gradient-to-br from-blue-50 via-white to-purple-50">
+        {/* Header */}
         <header className="bg-white shadow-md sticky top-0 z-50">
           <div className="max-w-7xl mx-auto px-4 py-4">
             <div className="flex items-center gap-4">
@@ -55,23 +93,24 @@ export default function DesignsPage() {
               </Link>
               <div>
                 <h1 className="text-xl font-bold text-gray-900">Design Library</h1>
-                <p className="text-xs text-gray-600">Choose your room area</p>
+                <p className="text-xs text-gray-600">Which area do you want to design?</p>
               </div>
             </div>
           </div>
         </header>
 
+        {/* Room Selection */}
         <div className="max-w-7xl mx-auto px-4 py-8">
           <div className="text-center mb-12">
             <h2 className="text-3xl md:text-4xl font-bold text-gray-900 mb-4">
               Which area do you want to design?
             </h2>
             <p className="text-lg text-gray-600">
-              Select a room to explore our curated designs
+              Select a space to explore our curated designs
             </p>
           </div>
 
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 max-w-5xl mx-auto">
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 max-w-6xl mx-auto">
             {ROOM_AREAS.map((room) => (
               <button
                 key={room.id}
@@ -101,6 +140,7 @@ export default function DesignsPage() {
   // Step 2: Design Grid
   return (
     <div className="min-h-screen bg-gradient-to-br from-blue-50 via-white to-purple-50">
+      {/* Header */}
       <header className="bg-white shadow-md sticky top-0 z-50">
         <div className="max-w-7xl mx-auto px-4 py-4">
           <div className="flex items-center gap-4">
@@ -123,6 +163,7 @@ export default function DesignsPage() {
         </div>
       </header>
 
+      {/* Designs Grid */}
       <div className="max-w-7xl mx-auto px-4 py-8">
         {loading ? (
           <div className="flex items-center justify-center h-64">
@@ -133,58 +174,101 @@ export default function DesignsPage() {
           </div>
         ) : designs.length > 0 ? (
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
-            {designs.map((design) => (
-              <div
-                key={design.id}
-                className="bg-white rounded-2xl shadow-lg hover:shadow-2xl transition-all duration-300 overflow-hidden group"
-              >
-                <div className="relative h-64 bg-gray-100 overflow-hidden">
-                  <img
-                    src={design.image_url || 'https://via.placeholder.com/400x300?text=Design+Preview'}
-                    alt={design.name}
-                    className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-500"
-                    onError={(e) => {
-                      e.target.src = 'https://via.placeholder.com/400x300?text=Design+Preview';
-                    }}
-                  />
-                  <div className="absolute top-4 right-4 bg-white px-3 py-1 rounded-full shadow-lg">
-                    <span className="text-sm font-bold text-blue-600">
-                      ₹{design.price_per_sqft}/sq.ft
-                    </span>
+            {designs.map((design) => {
+              const images = getDesignImages(design);
+              const currentIndex = imageIndexes[design.id] || 0;
+              const hasMultipleImages = images.length > 1;
+
+              return (
+                <div
+                  key={design.id}
+                  className="bg-white rounded-2xl shadow-lg hover:shadow-2xl transition-all duration-300 overflow-hidden group"
+                >
+                  {/* Image Slider */}
+                  <div className="relative h-64 bg-gray-100 overflow-hidden">
+                    <Link href={`/design-detail?id=${design.id}`}>
+                      <img
+                        src={images[currentIndex]}
+                        alt={design.name}
+                        className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-500"
+                        onError={(e) => {
+                          e.target.src = 'https://via.placeholder.com/400x300?text=Design+Preview';
+                        }}
+                      />
+                    </Link>
+
+                    {/* Image Navigation */}
+                    {hasMultipleImages && (
+                      <>
+                        <button
+                          onClick={(e) => prevImage(design.id, e)}
+                          className="absolute left-2 top-1/2 -translate-y-1/2 w-8 h-8 bg-white/90 backdrop-blur-sm rounded-full flex items-center justify-center shadow-md hover:bg-white transition-all opacity-0 group-hover:opacity-100"
+                        >
+                          <ChevronLeft className="w-5 h-5 text-gray-700" />
+                        </button>
+                        <button
+                          onClick={(e) => nextImage(design.id, e)}
+                          className="absolute right-2 top-1/2 -translate-y-1/2 w-8 h-8 bg-white/90 backdrop-blur-sm rounded-full flex items-center justify-center shadow-md hover:bg-white transition-all opacity-0 group-hover:opacity-100"
+                        >
+                          <ChevronRight className="w-5 h-5 text-gray-700" />
+                        </button>
+
+                        {/* Image Indicators */}
+                        <div className="absolute bottom-4 left-1/2 -translate-x-1/2 flex gap-2">
+                          {images.map((_, idx) => (
+                            <div
+                              key={idx}
+                              className={`w-2 h-2 rounded-full transition-all ${
+                                idx === currentIndex ? 'bg-white w-6' : 'bg-white/50'
+                              }`}
+                            />
+                          ))}
+                        </div>
+                      </>
+                    )}
+
+                    {/* Price Badge */}
+                    <div className="absolute top-4 right-4 bg-white px-3 py-1 rounded-full shadow-lg">
+                      <span className="text-sm font-bold text-blue-600">
+                        ₹{design.price_per_sqft}/sq.ft
+                      </span>
+                    </div>
+                  </div>
+
+                  {/* Design Info */}
+                  <div className="p-6 space-y-4">
+                    <div>
+                      <h3 className="text-xl font-bold text-gray-900 mb-2">
+                        {design.name}
+                      </h3>
+                      <p className="text-sm text-gray-600 line-clamp-2">
+                        {design.description || 'Premium wall panel design with modern aesthetics and superior quality materials'}
+                      </p>
+                    </div>
+
+                    <div className="flex items-center gap-4 text-sm">
+                      <div className="flex items-center gap-2">
+                        <span className="w-3 h-3 bg-blue-500 rounded-full"></span>
+                        <span className="text-gray-700 font-medium">{design.finish_type || 'Premium'}</span>
+                      </div>
+                      <div className="text-gray-500">•</div>
+                      <div className="text-gray-700 font-semibold">
+                        Starting ₹{(design.price_per_sqft * 100).toLocaleString('en-IN')}
+                      </div>
+                    </div>
+
+                    {/* View Details Button */}
+                    <Link
+                      href={`/design-detail?id=${design.id}`}
+                      className="flex items-center justify-center gap-2 w-full py-3 bg-gradient-to-r from-blue-600 to-blue-700 text-white rounded-xl font-semibold hover:from-blue-700 hover:to-blue-800 transition-all shadow-lg hover:shadow-xl"
+                    >
+                      <Eye className="w-5 h-5" />
+                      View Details
+                    </Link>
                   </div>
                 </div>
-
-                <div className="p-6 space-y-4">
-                  <div>
-                    <h3 className="text-xl font-bold text-gray-900 mb-2">
-                      {design.name}
-                    </h3>
-                    <p className="text-sm text-gray-600 line-clamp-2">
-                      {design.description || 'Premium wall panel design with modern aesthetics and superior quality materials'}
-                    </p>
-                  </div>
-
-                  <div className="flex items-center gap-4 text-sm">
-                    <div className="flex items-center gap-2">
-                      <span className="w-3 h-3 bg-blue-500 rounded-full"></span>
-                      <span className="text-gray-700 font-medium">{design.finish_type || 'Premium'}</span>
-                    </div>
-                    <div className="text-gray-500">•</div>
-                    <div className="text-gray-700 font-semibold">
-                      Starting ₹{(design.price_per_sqft * 100).toLocaleString('en-IN')}
-                    </div>
-                  </div>
-
-                  <Link
-                    href={`/design-detail?id=${design.id}`}
-                    className="flex items-center justify-center gap-2 w-full py-3 bg-gradient-to-r from-blue-600 to-blue-700 text-white rounded-xl font-semibold hover:from-blue-700 hover:to-blue-800 transition-all shadow-lg hover:shadow-xl"
-                  >
-                    <Eye className="w-5 h-5" />
-                    View Details
-                  </Link>
-                </div>
-              </div>
-            ))}
+              );
+            })}
           </div>
         ) : (
           <div className="text-center py-16">
