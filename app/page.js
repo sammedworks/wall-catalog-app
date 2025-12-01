@@ -1,6 +1,6 @@
 'use client';
 import Link from 'next/link';
-import { Palette, FileText, Phone } from 'lucide-react';
+import { Palette, FileText, Phone, Sparkles } from 'lucide-react';
 
 export default function HomePage() {
   return (
@@ -18,12 +18,21 @@ export default function HomePage() {
                 <p className="text-xs text-gray-600">Premium Wall Designs</p>
               </div>
             </div>
-            <Link
-              href="/login"
-              className="text-sm text-blue-600 hover:text-blue-700 font-semibold"
-            >
-              Admin
-            </Link>
+            <div className="flex items-center gap-4">
+              <Link
+                href="/browse"
+                className="text-sm text-purple-600 hover:text-purple-700 font-semibold flex items-center gap-2"
+              >
+                <Sparkles className="w-4 h-4" />
+                Browse UI
+              </Link>
+              <Link
+                href="/login"
+                className="text-sm text-blue-600 hover:text-blue-700 font-semibold"
+              >
+                Admin
+              </Link>
+            </div>
           </div>
         </div>
       </header>
@@ -115,6 +124,33 @@ export default function HomePage() {
                   Get in Touch
                   <span className="text-xl">→</span>
                 </span>
+              </div>
+            </div>
+          </Link>
+        </div>
+
+        {/* New Browse UI Card */}
+        <div className="mt-8 max-w-5xl mx-auto">
+          <Link
+            href="/browse"
+            className="group bg-gradient-to-r from-purple-600 to-blue-600 rounded-3xl shadow-xl hover:shadow-2xl transition-all duration-300 p-8 border-2 border-transparent transform hover:-translate-y-1"
+          >
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-6">
+                <div className="w-16 h-16 bg-white/20 backdrop-blur-sm rounded-2xl flex items-center justify-center group-hover:scale-110 transition-transform">
+                  <Sparkles className="w-8 h-8 text-white" />
+                </div>
+                <div>
+                  <h3 className="text-2xl font-bold text-white mb-2">
+                    Premium Browse Experience
+                  </h3>
+                  <p className="text-white/90 text-sm leading-relaxed">
+                    Explore our tablet-optimized UI with material swatches, filters, and premium design cards
+                  </p>
+                </div>
+              </div>
+              <div className="text-white font-semibold text-lg group-hover:translate-x-2 transition-transform">
+                →
               </div>
             </div>
           </Link>
