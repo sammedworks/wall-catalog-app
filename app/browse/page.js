@@ -1,5 +1,5 @@
 'use client';
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { supabase } from '@/lib/supabase';
 import Link from 'next/link';
 import { ArrowLeft, Heart, Search, ChevronLeft, ChevronRight } from 'lucide-react';
@@ -48,12 +48,17 @@ export default function BrowsePage() {
   const [materials, setMaterials] = useState([]);
   const [tags, setTags] = useState([]);
   const [loading, setLoading] = useState(true);
-  const [selectedMaterial, setSelectedMaterial] = useState(null);
+  const [selectedMaterials, setSelectedMaterials] = useState([]);
   const [selectedCategory, setSelectedCategory] = useState(null);
   const [selectedTags, setSelectedTags] = useState([]);
   const [favorites, setFavorites] = useState([]);
   const [imageIndexes, setImageIndexes] = useState({});
   const [searchQuery, setSearchQuery] = useState('');
+  
+  // Slider refs
+  const materialSliderRef = useRef(null);
+  const [canScrollLeft, setCanScrollLeft] = useState(false);
+  const [canScrollRight, setCanScrollRight] = useState(false);
 
   useEffect(() => {
     loadMaterials();
@@ -64,7 +69,11 @@ export default function BrowsePage() {
 
   useEffect(() => {
     loadDesigns();
-  }, [selectedMaterial, selectedCategory, selectedTags, searchQuery]);
+  }, [selectedMaterials, selectedCategory, selectedTags, searchQuery]);
+
+  useEffect(() => {
+    checkScrollButtons();
+  }, [materials]);
 
   const loadMaterials = async () => {
     try {
@@ -109,6 +118,11 @@ export default function BrowsePage() {
         query = query.eq('space_category', selectedCategory);
       }
 
+      // Filter by materials (multi-select)
+      if (selectedMaterials.length > 0) {
+        query = query.overlaps('material_names', selectedMaterials);
+      }
+
       // Filter by search
       if (searchQuery) {
         query = query.ilike('name', `%${searchQuery}%`);
@@ -151,6 +165,14 @@ export default function BrowsePage() {
     localStorage.setItem('favorites', JSON.stringify(newFavorites));
   };
 
+  const toggleMaterial = (materialSlug) => {
+    if (selectedMaterials.includes(materialSlug)) {
+      setSelectedMaterials(selectedMaterials.filter(slug => slug !== materialSlug));
+    } else {
+      setSelectedMaterials([...selectedMaterials, materialSlug]);
+    }
+  };
+
   const toggleTag = (tagId) => {
     if (selectedTags.includes(tagId)) {
       setSelectedTags(selectedTags.filter(id => id !== tagId));
@@ -185,6 +207,31 @@ export default function BrowsePage() {
       images.push('https://via.placeholder.com/400x300?text=Design');
     }
     return images;
+  };
+
+  // Material Slider Functions
+  const scrollMaterialSlider = (direction) => {
+    if (!materialSliderRef.current) return;
+    
+    const scrollAmount = 300;
+    const newScrollLeft = materialSliderRef.current.scrollLeft + (direction === 'left' ? -scrollAmount : scrollAmount);
+    
+    materialSliderRef.current.scrollTo({
+      left: newScrollLeft,
+      behavior: 'smooth'
+    });
+  };
+
+  const checkScrollButtons = () => {
+    if (!materialSliderRef.current) return;
+    
+    const { scrollLeft, scrollWidth, clientWidth } = materialSliderRef.current;
+    setCanScrollLeft(scrollLeft > 0);
+    setCanScrollRight(scrollLeft < scrollWidth - clientWidth - 10);
+  };
+
+  const handleSliderScroll = () => {
+    checkScrollButtons();
   };
 
   return (
@@ -233,7 +280,7 @@ export default function BrowsePage() {
         {/* Top Section - Category Cards (6 areas) */}
         <section className="mb-12">
           <h2 className="text-xl font-semibold text-gray-900 mb-6" style={{ fontFamily: 'SF Pro Display, Inter, system-ui, sans-serif' }}>
-            Explore by Space
+            Explore designs for
           </h2>
           <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4">
             {CATEGORIES.map((category) => (
@@ -265,45 +312,129 @@ export default function BrowsePage() {
           </div>
         </section>
 
-        {/* Middle Section - Material Swatches & Tags */}
+        {/* Middle Section - Explore by Look Material Slider */}
         <section className="mb-10">
           <h2 className="text-xl font-semibold text-gray-900 mb-6" style={{ fontFamily: 'SF Pro Display, Inter, system-ui, sans-serif' }}>
-            Explore All Looks
+            Explore all looks
           </h2>
           
-          {/* Material Swatches */}
+          {/* Material Slider */}
           {materials.length > 0 && (
-            <div className="flex items-center gap-4 mb-6 overflow-x-auto pb-2">
-              {materials.map((material) => (
+            <div className="relative group">
+              {/* Left Scroll Button */}
+              {canScrollLeft && (
                 <button
-                  key={material.id}
-                  onClick={() => setSelectedMaterial(material.id === selectedMaterial ? null : material.id)}
-                  className={`flex-shrink-0 group transition-all duration-200 ${
-                    selectedMaterial === material.id ? 'scale-105' : ''
-                  }`}
+                  onClick={() => scrollMaterialSlider('left')}
+                  className="absolute left-0 top-1/2 -translate-y-1/2 z-10 w-10 h-10 bg-white shadow-lg rounded-full flex items-center justify-center hover:bg-gray-50 transition-all opacity-0 group-hover:opacity-100"
+                  style={{ marginLeft: '-20px' }}
                 >
-                  <div className="flex flex-col items-center gap-2">
-                    <div
-                      className={`w-16 h-16 rounded-2xl shadow-md group-hover:shadow-lg transition-all duration-200 ${
-                        selectedMaterial === material.id ? 'ring-3 ring-gray-900 ring-offset-2' : ''
-                      }`}
-                      style={{ backgroundColor: material.color_code }}
-                    ></div>
-                    <span 
-                      className="text-xs font-medium text-gray-700"
-                      style={{ fontFamily: 'SF Pro Display, Inter, system-ui, sans-serif' }}
-                    >
-                      {material.name}
-                    </span>
-                  </div>
+                  <ChevronLeft className="w-6 h-6 text-gray-700" />
                 </button>
-              ))}
+              )}
+
+              {/* Slider Container */}
+              <div
+                ref={materialSliderRef}
+                onScroll={handleSliderScroll}
+                className="flex gap-6 overflow-x-auto scrollbar-hide scroll-smooth pb-4"
+                style={{
+                  scrollbarWidth: 'none',
+                  msOverflowStyle: 'none',
+                  WebkitOverflowScrolling: 'touch'
+                }}
+              >
+                {materials.map((material) => (
+                  <button
+                    key={material.id}
+                    onClick={() => toggleMaterial(material.slug)}
+                    className={`flex-shrink-0 group/item transition-all duration-200 ${
+                      selectedMaterials.includes(material.slug) ? 'scale-105' : ''
+                    }`}
+                  >
+                    <div className="flex flex-col items-center gap-2">
+                      {/* Material Thumbnail */}
+                      <div
+                        className={`w-20 h-20 rounded-2xl shadow-md overflow-hidden transition-all duration-200 ${
+                          selectedMaterials.includes(material.slug) 
+                            ? 'ring-3 ring-gray-900 ring-offset-2' 
+                            : 'group-hover/item:shadow-lg'
+                        }`}
+                        style={{ backgroundColor: material.color_code }}
+                      >
+                        {material.thumbnail_url ? (
+                          <img
+                            src={material.thumbnail_url}
+                            alt={material.name}
+                            className="w-full h-full object-cover"
+                            onError={(e) => {
+                              e.target.style.display = 'none';
+                            }}
+                          />
+                        ) : null}
+                      </div>
+                      
+                      {/* Material Name */}
+                      <span 
+                        className={`text-xs font-medium transition-colors ${
+                          selectedMaterials.includes(material.slug)
+                            ? 'text-gray-900 font-semibold'
+                            : 'text-gray-600'
+                        }`}
+                        style={{ fontFamily: 'SF Pro Display, Inter, system-ui, sans-serif' }}
+                      >
+                        {material.name}
+                      </span>
+                    </div>
+                  </button>
+                ))}
+              </div>
+
+              {/* Right Scroll Button */}
+              {canScrollRight && (
+                <button
+                  onClick={() => scrollMaterialSlider('right')}
+                  className="absolute right-0 top-1/2 -translate-y-1/2 z-10 w-10 h-10 bg-white shadow-lg rounded-full flex items-center justify-center hover:bg-gray-50 transition-all opacity-0 group-hover:opacity-100"
+                  style={{ marginRight: '-20px' }}
+                >
+                  <ChevronRight className="w-6 h-6 text-gray-700" />
+                </button>
+              )}
+            </div>
+          )}
+
+          {/* Selected Materials Display */}
+          {selectedMaterials.length > 0 && (
+            <div className="mt-4 flex items-center gap-2 flex-wrap">
+              <span className="text-sm text-gray-600">Filtering by:</span>
+              {selectedMaterials.map((slug) => {
+                const material = materials.find(m => m.slug === slug);
+                return material ? (
+                  <span
+                    key={slug}
+                    className="inline-flex items-center gap-2 px-3 py-1.5 bg-gray-900 text-white text-sm rounded-full"
+                  >
+                    {material.name}
+                    <button
+                      onClick={() => toggleMaterial(slug)}
+                      className="hover:bg-white/20 rounded-full p-0.5"
+                    >
+                      ×
+                    </button>
+                  </span>
+                ) : null;
+              })}
+              <button
+                onClick={() => setSelectedMaterials([])}
+                className="text-sm text-gray-600 hover:text-gray-900 underline"
+              >
+                Clear all
+              </button>
             </div>
           )}
 
           {/* Tag Chips */}
           {tags.length > 0 && (
-            <div className="flex items-center gap-3 flex-wrap">
+            <div className="flex items-center gap-3 flex-wrap mt-6">
               {tags.map((tag) => (
                 <button
                   key={tag.id}
@@ -322,7 +453,7 @@ export default function BrowsePage() {
           )}
         </section>
 
-        {/* Bottom Section - Design Cards Grid with Two-Image Slider */}
+        {/* Bottom Section - Design Cards Grid */}
         <section>
           <div className="flex items-center justify-between mb-6">
             <h2 className="text-xl font-semibold text-gray-900" style={{ fontFamily: 'SF Pro Display, Inter, system-ui, sans-serif' }}>
@@ -460,7 +591,7 @@ export default function BrowsePage() {
               <button
                 onClick={() => {
                   setSelectedCategory(null);
-                  setSelectedMaterial(null);
+                  setSelectedMaterials([]);
                   setSelectedTags([]);
                   setSearchQuery('');
                 }}
@@ -472,6 +603,17 @@ export default function BrowsePage() {
           )}
         </section>
       </div>
+
+      {/* Hide scrollbar globally for slider */}
+      <style jsx global>{`
+        .scrollbar-hide::-webkit-scrollbar {
+          display: none;
+        }
+        .scrollbar-hide {
+          -ms-overflow-style: none;
+          scrollbar-width: none;
+        }
+      `}</style>
     </div>
   );
 }
