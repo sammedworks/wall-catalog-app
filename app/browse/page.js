@@ -2,8 +2,9 @@
 import { useState, useEffect, useRef } from 'react';
 import { supabase } from '@/lib/supabase';
 import Link from 'next/link';
-import { Heart, ChevronLeft, ChevronRight } from 'lucide-react';
+import { Heart, ChevronLeft, ChevronRight, AlertCircle, RefreshCw } from 'lucide-react';
 
+// Space categories - can be made dynamic later
 const SPACE_CATEGORIES = [
   { 
     id: 'tv-unit', 
@@ -38,10 +39,14 @@ const SPACE_CATEGORIES = [
 ];
 
 export default function BrowsePage() {
+  // State management
   const [designs, setDesigns] = useState([]);
   const [materials, setMaterials] = useState([]);
+  const [tags, setTags] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(null);
   const [selectedMaterials, setSelectedMaterials] = useState([]);
+  const [selectedTags, setSelectedTags] = useState([]);
   const [selectedSpace, setSelectedSpace] = useState(null);
   const [favorites, setFavorites] = useState([]);
   const [imageIndexes, setImageIndexes] = useState({});
@@ -51,58 +56,164 @@ export default function BrowsePage() {
   const [canScrollLeft, setCanScrollLeft] = useState(false);
   const [canScrollRight, setCanScrollRight] = useState(false);
 
+  // Load all data on mount
   useEffect(() => {
-    loadMaterials();
-    loadDesigns();
+    loadAllData();
     loadFavorites();
   }, []);
 
+  // Reload designs when filters change
   useEffect(() => {
-    loadDesigns();
-  }, [selectedMaterials, selectedSpace]);
+    if (!loading) {
+      loadDesigns();
+    }
+  }, [selectedMaterials, selectedTags, selectedSpace]);
 
+  // Check scroll buttons when materials load
   useEffect(() => {
     checkScrollButtons();
   }, [materials]);
 
+  // ============================================
+  // DATA LOADING FUNCTIONS
+  // ============================================
+
+  const loadAllData = async () => {
+    setLoading(true);
+    setError(null);
+    
+    try {
+      // Load all data in parallel
+      await Promise.all([
+        loadMaterials(),
+        loadTags(),
+        loadDesigns()
+      ]);
+    } catch (err) {
+      console.error('Error loading data:', err);
+      setError('Failed to load catalog data. Please refresh the page.');
+    } finally {
+      setLoading(false);
+    }
+  };
+
   const loadMaterials = async () => {
     try {
+      console.log('Loading materials...');
+      
       const { data, error } = await supabase
         .from('materials')
         .select('*')
         .eq('is_active', true)
         .order('display_order');
 
-      if (error) throw error;
+      if (error) {
+        console.error('Materials error:', error);
+        throw error;
+      }
+
+      console.log('Materials loaded:', data?.length || 0);
       setMaterials(data || []);
+      
+      return data;
     } catch (error) {
       console.error('Error loading materials:', error);
+      // Don't throw - allow page to continue with empty materials
+      setMaterials([]);
+      return [];
+    }
+  };
+
+  const loadTags = async () => {
+    try {
+      console.log('Loading tags...');
+      
+      const { data, error } = await supabase
+        .from('design_tags')
+        .select('*')
+        .eq('is_active', true)
+        .order('category, display_order');
+
+      if (error) {
+        console.error('Tags error:', error);
+        throw error;
+      }
+
+      console.log('Tags loaded:', data?.length || 0);
+      setTags(data || []);
+      
+      return data;
+    } catch (error) {
+      console.error('Error loading tags:', error);
+      // Don't throw - allow page to continue with empty tags
+      setTags([]);
+      return [];
     }
   };
 
   const loadDesigns = async () => {
-    setLoading(true);
     try {
+      console.log('Loading designs with filters:', {
+        space: selectedSpace,
+        materials: selectedMaterials,
+        tags: selectedTags
+      });
+
+      // Try designs table first (new structure)
       let query = supabase
-        .from('products')
+        .from('designs')
         .select('*')
         .eq('is_active', true);
 
-      // Filter by space category
+      // Apply filters
       if (selectedSpace) {
         query = query.eq('space_category', selectedSpace);
       }
 
-      // Filter by materials (multi-select)
       if (selectedMaterials.length > 0) {
-        query = query.overlaps('material_names', selectedMaterials);
+        query = query.overlaps('material_slugs', selectedMaterials);
       }
 
-      query = query.order('created_at', { ascending: false });
+      if (selectedTags.length > 0) {
+        query = query.overlaps('tag_slugs', selectedTags);
+      }
 
-      const { data, error } = await query;
+      query = query.order('display_order', { ascending: true })
+                   .order('created_at', { ascending: false });
 
-      if (error) throw error;
+      let { data, error } = await query;
+
+      // Fallback to products table if designs table is empty or has error
+      if (error || !data || data.length === 0) {
+        console.log('Trying products table as fallback...');
+        
+        query = supabase
+          .from('products')
+          .select('*')
+          .eq('is_active', true);
+
+        if (selectedSpace) {
+          query = query.eq('space_category', selectedSpace);
+        }
+
+        if (selectedMaterials.length > 0) {
+          // Try both material_slugs and material_names for backward compatibility
+          query = query.or(`material_slugs.ov.{${selectedMaterials.join(',')}},material_names.ov.{${selectedMaterials.join(',')}}`);
+        }
+
+        query = query.order('created_at', { ascending: false });
+
+        const result = await query;
+        data = result.data;
+        error = result.error;
+      }
+
+      if (error) {
+        console.error('Designs error:', error);
+        throw error;
+      }
+
+      console.log('Designs loaded:', data?.length || 0);
 
       // Initialize image indexes
       const indexes = {};
@@ -112,27 +223,41 @@ export default function BrowsePage() {
       setImageIndexes(indexes);
 
       setDesigns(data || []);
+      return data;
     } catch (error) {
       console.error('Error loading designs:', error);
-    } finally {
-      setLoading(false);
+      setDesigns([]);
+      return [];
     }
   };
 
   const loadFavorites = () => {
-    const saved = JSON.parse(localStorage.getItem('favorites') || '[]');
-    setFavorites(saved);
+    try {
+      const saved = JSON.parse(localStorage.getItem('favorites') || '[]');
+      setFavorites(saved);
+    } catch (error) {
+      console.error('Error loading favorites:', error);
+      setFavorites([]);
+    }
   };
 
+  // ============================================
+  // INTERACTION HANDLERS
+  // ============================================
+
   const toggleFavorite = (designId) => {
-    let newFavorites;
-    if (favorites.includes(designId)) {
-      newFavorites = favorites.filter(id => id !== designId);
-    } else {
-      newFavorites = [...favorites, designId];
+    try {
+      let newFavorites;
+      if (favorites.includes(designId)) {
+        newFavorites = favorites.filter(id => id !== designId);
+      } else {
+        newFavorites = [...favorites, designId];
+      }
+      setFavorites(newFavorites);
+      localStorage.setItem('favorites', JSON.stringify(newFavorites));
+    } catch (error) {
+      console.error('Error toggling favorite:', error);
     }
-    setFavorites(newFavorites);
-    localStorage.setItem('favorites', JSON.stringify(newFavorites));
   };
 
   const toggleMaterial = (materialSlug) => {
@@ -141,6 +266,20 @@ export default function BrowsePage() {
     } else {
       setSelectedMaterials([...selectedMaterials, materialSlug]);
     }
+  };
+
+  const toggleTag = (tagSlug) => {
+    if (selectedTags.includes(tagSlug)) {
+      setSelectedTags(selectedTags.filter(slug => slug !== tagSlug));
+    } else {
+      setSelectedTags([...selectedTags, tagSlug]);
+    }
+  };
+
+  const clearAllFilters = () => {
+    setSelectedMaterials([]);
+    setSelectedTags([]);
+    setSelectedSpace(null);
   };
 
   const nextImage = (designId, e) => {
@@ -171,7 +310,10 @@ export default function BrowsePage() {
     return images;
   };
 
-  // Material Slider Functions
+  // ============================================
+  // SLIDER FUNCTIONS
+  // ============================================
+
   const scrollMaterialSlider = (direction) => {
     if (!materialSliderRef.current) return;
     
@@ -195,6 +337,84 @@ export default function BrowsePage() {
   const handleSliderScroll = () => {
     checkScrollButtons();
   };
+
+  // ============================================
+  // RENDER HELPERS
+  // ============================================
+
+  const renderError = () => (
+    <div className="min-h-screen bg-gray-50 flex items-center justify-center p-8">
+      <div className="max-w-md w-full bg-white rounded-xl shadow-lg p-8 text-center">
+        <AlertCircle className="w-16 h-16 text-red-500 mx-auto mb-4" />
+        <h2 className="text-2xl font-bold text-gray-900 mb-2">Unable to Load Catalog</h2>
+        <p className="text-gray-600 mb-6">{error}</p>
+        <button
+          onClick={() => {
+            setError(null);
+            loadAllData();
+          }}
+          className="flex items-center gap-2 px-6 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-all mx-auto"
+        >
+          <RefreshCw className="w-5 h-5" />
+          Retry
+        </button>
+      </div>
+    </div>
+  );
+
+  const renderLoading = () => (
+    <div className="min-h-screen bg-gray-50">
+      <header className="bg-white border-b border-gray-200 sticky top-0 z-50 shadow-sm">
+        <div className="max-w-[1400px] mx-auto px-8 py-4">
+          <div className="flex items-center justify-between">
+            <div className="text-2xl font-bold text-gray-900">WALL CATALOG</div>
+            <div className="flex items-center gap-8">
+              <div className="h-6 w-20 bg-gray-200 rounded animate-pulse"></div>
+              <div className="h-10 w-32 bg-gray-200 rounded-xl animate-pulse"></div>
+            </div>
+          </div>
+        </div>
+      </header>
+      
+      <div className="max-w-[1400px] mx-auto px-8 py-8">
+        <div className="flex items-center justify-center min-h-[400px]">
+          <div className="text-center">
+            <div className="inline-block animate-spin rounded-full h-16 w-16 border-b-4 border-blue-600 mb-4"></div>
+            <p className="text-gray-600 font-medium text-lg">Loading catalog...</p>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+
+  const renderEmptyState = () => (
+    <div className="text-center py-16">
+      <div className="text-6xl mb-4">🏠</div>
+      <h3 className="text-2xl font-bold text-gray-900 mb-2">No Designs Found</h3>
+      <p className="text-gray-600 mb-6">
+        {selectedMaterials.length > 0 || selectedTags.length > 0 || selectedSpace
+          ? 'Try adjusting your filters to see more results.'
+          : 'No designs available at the moment. Check back soon!'}
+      </p>
+      {(selectedMaterials.length > 0 || selectedTags.length > 0 || selectedSpace) && (
+        <button
+          onClick={clearAllFilters}
+          className="px-6 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-all"
+        >
+          Clear All Filters
+        </button>
+      )}
+    </div>
+  );
+
+  // ============================================
+  // MAIN RENDER
+  // ============================================
+
+  if (error) return renderError();
+  if (loading) return renderLoading();
+
+  const activeFiltersCount = selectedMaterials.length + selectedTags.length + (selectedSpace ? 1 : 0);
 
   return (
     <div className="min-h-screen bg-gray-50">
@@ -231,6 +451,38 @@ export default function BrowsePage() {
       </header>
 
       <div className="max-w-[1400px] mx-auto px-8 py-8">
+        {/* Active Filters Badge */}
+        {activeFiltersCount > 0 && (
+          <div className="mb-6 flex items-center justify-between bg-blue-50 border border-blue-200 rounded-lg px-4 py-3">
+            <div className="flex items-center gap-2">
+              <span className="text-sm font-medium text-blue-900">
+                {activeFiltersCount} filter{activeFiltersCount > 1 ? 's' : ''} active
+              </span>
+              {selectedSpace && (
+                <span className="px-2 py-1 bg-blue-100 text-blue-700 text-xs rounded-full">
+                  {SPACE_CATEGORIES.find(s => s.id === selectedSpace)?.name}
+                </span>
+              )}
+              {selectedMaterials.map(slug => (
+                <span key={slug} className="px-2 py-1 bg-blue-100 text-blue-700 text-xs rounded-full">
+                  {materials.find(m => m.slug === slug)?.name || slug}
+                </span>
+              ))}
+              {selectedTags.map(slug => (
+                <span key={slug} className="px-2 py-1 bg-blue-100 text-blue-700 text-xs rounded-full">
+                  {tags.find(t => t.slug === slug)?.name || slug}
+                </span>
+              ))}
+            </div>
+            <button
+              onClick={clearAllFilters}
+              className="text-sm font-medium text-blue-600 hover:text-blue-700"
+            >
+              Clear All
+            </button>
+          </div>
+        )}
+
         {/* Section 1: Explore By Space */}
         <section className="mb-12">
           <h2 className="text-2xl font-semibold text-gray-900 mb-6" style={{ fontFamily: 'SF Pro Display, Inter, system-ui, sans-serif' }}>
@@ -249,230 +501,170 @@ export default function BrowsePage() {
                   <img
                     src={space.image}
                     alt={space.name}
-                    className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-500"
-                    onError={(e) => {
-                      e.target.src = 'https://via.placeholder.com/400x300?text=' + space.name;
-                    }}
+                    className="w-full h-full object-cover"
                   />
-                  <div className="absolute inset-0 bg-gradient-to-t from-black/70 via-black/20 to-transparent"></div>
-                </div>
-                <div className="absolute bottom-0 left-0 right-0 p-4">
-                  <h3 className="text-base font-semibold text-white text-center" style={{ fontFamily: 'SF Pro Display, Inter, system-ui, sans-serif' }}>
-                    {space.name}
-                  </h3>
+                  <div className={`absolute inset-0 bg-gradient-to-t from-black/70 via-black/20 to-transparent transition-all ${
+                    selectedSpace === space.id ? 'from-blue-600/70' : ''
+                  }`}></div>
+                  <div className="absolute bottom-0 left-0 right-0 p-4">
+                    <h3 className="text-white font-semibold text-base" style={{ fontFamily: 'SF Pro Display, Inter, system-ui, sans-serif' }}>
+                      {space.name}
+                    </h3>
+                  </div>
                 </div>
               </button>
             ))}
           </div>
-          
-          {/* Selected Space Display */}
-          {selectedSpace && (
-            <div className="mt-4 flex items-center gap-3">
-              <span className="text-sm text-gray-600">Viewing:</span>
-              <span className="inline-flex items-center gap-2 px-4 py-2 bg-gray-900 text-white text-sm font-medium rounded-full">
-                {SPACE_CATEGORIES.find(s => s.id === selectedSpace)?.name}
-                <button
-                  onClick={() => setSelectedSpace(null)}
-                  className="hover:bg-white/20 rounded-full p-0.5 transition-colors"
-                >
-                  ×
-                </button>
-              </span>
-            </div>
-          )}
         </section>
 
-        {/* Section 2: Explore By All Looks (Material Slider) */}
-        <section className="mb-12">
-          <h2 className="text-2xl font-semibold text-gray-900 mb-6" style={{ fontFamily: 'SF Pro Display, Inter, system-ui, sans-serif' }}>
-            Explore By All Looks
-          </h2>
-          
-          {/* Material Slider */}
-          {materials.length > 0 ? (
-            <div className="relative group">
-              {/* Left Scroll Button */}
+        {/* Section 2: Explore By Look (Materials) */}
+        {materials.length > 0 && (
+          <section className="mb-12">
+            <h2 className="text-2xl font-semibold text-gray-900 mb-6" style={{ fontFamily: 'SF Pro Display, Inter, system-ui, sans-serif' }}>
+              Explore By Look
+            </h2>
+            
+            <div className="relative">
+              {/* Left Arrow */}
               {canScrollLeft && (
                 <button
                   onClick={() => scrollMaterialSlider('left')}
-                  className="absolute left-0 top-1/2 -translate-y-1/2 z-10 w-12 h-12 bg-white shadow-xl rounded-full flex items-center justify-center hover:bg-gray-50 transition-all opacity-0 group-hover:opacity-100"
-                  style={{ marginLeft: '-24px' }}
+                  className="absolute left-0 top-1/2 -translate-y-1/2 z-10 w-10 h-10 bg-white rounded-full shadow-lg flex items-center justify-center hover:bg-gray-50 transition-all"
+                  aria-label="Scroll left"
                 >
-                  <ChevronLeft className="w-6 h-6 text-gray-700" />
+                  <ChevronLeft className="w-6 h-6 text-gray-900" />
                 </button>
               )}
 
-              {/* Slider Container */}
+              {/* Slider */}
               <div
                 ref={materialSliderRef}
                 onScroll={handleSliderScroll}
-                className="flex gap-6 overflow-x-auto scrollbar-hide scroll-smooth pb-4"
-                style={{
-                  scrollbarWidth: 'none',
-                  msOverflowStyle: 'none',
-                  WebkitOverflowScrolling: 'touch'
-                }}
+                className="flex gap-4 overflow-x-auto scrollbar-hide scroll-smooth pb-2"
+                style={{ scrollbarWidth: 'none', msOverflowStyle: 'none' }}
               >
                 {materials.map((material) => (
                   <button
                     key={material.id}
                     onClick={() => toggleMaterial(material.slug)}
-                    className={`flex-shrink-0 group/item transition-all duration-200 ${
-                      selectedMaterials.includes(material.slug) ? 'scale-105' : ''
+                    className={`flex-shrink-0 w-40 group ${
+                      selectedMaterials.includes(material.slug) ? 'ring-2 ring-gray-900 ring-offset-2' : ''
                     }`}
                   >
-                    <div className="flex flex-col items-center gap-3">
-                      {/* Material Thumbnail */}
-                      <div
-                        className={`w-24 h-24 rounded-2xl shadow-md overflow-hidden transition-all duration-200 ${
-                          selectedMaterials.includes(material.slug) 
-                            ? 'ring-4 ring-gray-900 ring-offset-2' 
-                            : 'group-hover/item:shadow-xl'
-                        }`}
-                        style={{ backgroundColor: material.color_code }}
-                      >
-                        {material.thumbnail_url ? (
-                          <img
-                            src={material.thumbnail_url}
-                            alt={material.name}
-                            className="w-full h-full object-cover"
-                            onError={(e) => {
-                              e.target.style.display = 'none';
-                            }}
-                          />
-                        ) : null}
-                      </div>
-                      
-                      {/* Material Name */}
-                      <span 
-                        className={`text-sm font-medium transition-colors ${
-                          selectedMaterials.includes(material.slug)
-                            ? 'text-gray-900 font-semibold'
-                            : 'text-gray-600'
-                        }`}
-                        style={{ fontFamily: 'SF Pro Display, Inter, system-ui, sans-serif' }}
-                      >
-                        {material.name}
-                      </span>
+                    <div className="aspect-square rounded-2xl overflow-hidden shadow-md hover:shadow-xl transition-all mb-3">
+                      <img
+                        src={material.image_url || 'https://via.placeholder.com/200?text=' + material.name}
+                        alt={material.name}
+                        className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-300"
+                      />
                     </div>
+                    <h3 className={`text-center font-medium ${
+                      selectedMaterials.includes(material.slug) ? 'text-gray-900' : 'text-gray-700'
+                    }`} style={{ fontFamily: 'SF Pro Display, Inter, system-ui, sans-serif' }}>
+                      {material.name}
+                    </h3>
                   </button>
                 ))}
               </div>
 
-              {/* Right Scroll Button */}
+              {/* Right Arrow */}
               {canScrollRight && (
                 <button
                   onClick={() => scrollMaterialSlider('right')}
-                  className="absolute right-0 top-1/2 -translate-y-1/2 z-10 w-12 h-12 bg-white shadow-xl rounded-full flex items-center justify-center hover:bg-gray-50 transition-all opacity-0 group-hover:opacity-100"
-                  style={{ marginRight: '-24px' }}
+                  className="absolute right-0 top-1/2 -translate-y-1/2 z-10 w-10 h-10 bg-white rounded-full shadow-lg flex items-center justify-center hover:bg-gray-50 transition-all"
+                  aria-label="Scroll right"
                 >
-                  <ChevronRight className="w-6 h-6 text-gray-700" />
+                  <ChevronRight className="w-6 h-6 text-gray-900" />
                 </button>
               )}
             </div>
-          ) : (
-            <div className="text-center py-12 bg-white rounded-2xl border-2 border-dashed border-gray-200">
-              <p className="text-gray-500 text-sm">Loading materials...</p>
-            </div>
-          )}
+          </section>
+        )}
 
-          {/* Selected Materials Display */}
-          {selectedMaterials.length > 0 && (
-            <div className="mt-6 flex items-center gap-3 flex-wrap">
-              <span className="text-sm text-gray-600 font-medium">Filtering by:</span>
-              {selectedMaterials.map((slug) => {
-                const material = materials.find(m => m.slug === slug);
-                return material ? (
-                  <span
-                    key={slug}
-                    className="inline-flex items-center gap-2 px-4 py-2 bg-gray-900 text-white text-sm font-medium rounded-full shadow-sm"
-                  >
-                    {material.name}
-                    <button
-                      onClick={() => toggleMaterial(slug)}
-                      className="hover:bg-white/20 rounded-full p-0.5 transition-colors"
-                    >
-                      ×
-                    </button>
-                  </span>
-                ) : null;
-              })}
-              <button
-                onClick={() => setSelectedMaterials([])}
-                className="text-sm text-gray-600 hover:text-gray-900 underline font-medium"
-              >
-                Clear all
-              </button>
+        {/* Section 3: Filter By Tags */}
+        {tags.length > 0 && (
+          <section className="mb-12">
+            <h2 className="text-2xl font-semibold text-gray-900 mb-6" style={{ fontFamily: 'SF Pro Display, Inter, system-ui, sans-serif' }}>
+              Filter By Style
+            </h2>
+            <div className="flex flex-wrap gap-3">
+              {tags.map((tag) => (
+                <button
+                  key={tag.id}
+                  onClick={() => toggleTag(tag.slug)}
+                  className={`px-5 py-2.5 rounded-full text-sm font-medium transition-all ${
+                    selectedTags.includes(tag.slug)
+                      ? 'bg-gray-900 text-white shadow-lg'
+                      : 'bg-white text-gray-700 border border-gray-300 hover:border-gray-900'
+                  }`}
+                  style={{ fontFamily: 'SF Pro Display, Inter, system-ui, sans-serif' }}
+                >
+                  {tag.name}
+                </button>
+              ))}
             </div>
-          )}
-        </section>
+          </section>
+        )}
 
-        {/* Section 3: Design Grid */}
+        {/* Section 4: Design Grid */}
         <section>
           <div className="flex items-center justify-between mb-6">
             <h2 className="text-2xl font-semibold text-gray-900" style={{ fontFamily: 'SF Pro Display, Inter, system-ui, sans-serif' }}>
-              {selectedSpace || selectedMaterials.length > 0 ? 'Filtered Designs' : 'All Designs'}
+              {selectedSpace 
+                ? `${SPACE_CATEGORIES.find(s => s.id === selectedSpace)?.name} Designs`
+                : 'All Designs'}
             </h2>
-            <p className="text-sm text-gray-500">
-              {designs.length} {designs.length === 1 ? 'design' : 'designs'} available
+            <p className="text-gray-600">
+              {designs.length} design{designs.length !== 1 ? 's' : ''} found
             </p>
           </div>
 
-          {loading ? (
-            <div className="flex items-center justify-center h-64">
-              <div className="text-center">
-                <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-gray-900 mx-auto mb-4"></div>
-                <p className="text-gray-600 text-sm">Loading designs...</p>
-              </div>
-            </div>
-          ) : designs.length > 0 ? (
+          {designs.length === 0 ? (
+            renderEmptyState()
+          ) : (
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
               {designs.map((design) => {
                 const images = getDesignImages(design);
                 const currentIndex = imageIndexes[design.id] || 0;
-                const hasMultipleImages = images.length > 1;
+                const isFavorite = favorites.includes(design.id);
 
                 return (
-                  <div
+                  <Link
                     key={design.id}
-                    className="group bg-white rounded-3xl overflow-hidden shadow-sm hover:shadow-xl transition-all duration-300"
+                    href={`/design/${design.id}`}
+                    className="group bg-white rounded-2xl overflow-hidden shadow-md hover:shadow-2xl transition-all duration-300"
                   >
-                    {/* Image Slider */}
+                    {/* Image Container */}
                     <div className="relative aspect-[4/3] overflow-hidden bg-gray-100">
-                      <Link href={`/design-detail?id=${design.id}`}>
-                        <img
-                          src={images[currentIndex]}
-                          alt={design.name}
-                          className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500"
-                          onError={(e) => {
-                            e.target.src = 'https://via.placeholder.com/400x300?text=Design';
-                          }}
-                        />
-                      </Link>
+                      <img
+                        src={images[currentIndex]}
+                        alt={design.name}
+                        className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-500"
+                      />
                       
                       {/* Image Navigation */}
-                      {hasMultipleImages && (
+                      {images.length > 1 && (
                         <>
                           <button
                             onClick={(e) => prevImage(design.id, e)}
-                            className="absolute left-2 top-1/2 -translate-y-1/2 w-8 h-8 bg-white/90 backdrop-blur-sm rounded-full flex items-center justify-center shadow-md hover:bg-white transition-all opacity-0 group-hover:opacity-100"
+                            className="absolute left-2 top-1/2 -translate-y-1/2 w-8 h-8 bg-white/90 rounded-full flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity hover:bg-white"
                           >
-                            <ChevronLeft className="w-5 h-5 text-gray-700" />
+                            <ChevronLeft className="w-5 h-5 text-gray-900" />
                           </button>
                           <button
                             onClick={(e) => nextImage(design.id, e)}
-                            className="absolute right-2 top-1/2 -translate-y-1/2 w-8 h-8 bg-white/90 backdrop-blur-sm rounded-full flex items-center justify-center shadow-md hover:bg-white transition-all opacity-0 group-hover:opacity-100"
+                            className="absolute right-2 top-1/2 -translate-y-1/2 w-8 h-8 bg-white/90 rounded-full flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity hover:bg-white"
                           >
-                            <ChevronRight className="w-5 h-5 text-gray-700" />
+                            <ChevronRight className="w-5 h-5 text-gray-900" />
                           </button>
-
+                          
                           {/* Image Indicators */}
-                          <div className="absolute bottom-4 left-1/2 -translate-x-1/2 flex gap-2">
+                          <div className="absolute bottom-2 left-1/2 -translate-x-1/2 flex gap-1">
                             {images.map((_, idx) => (
                               <div
                                 key={idx}
-                                className={`w-2 h-2 rounded-full transition-all ${
-                                  idx === currentIndex ? 'bg-white w-6' : 'bg-white/50'
+                                className={`w-1.5 h-1.5 rounded-full transition-all ${
+                                  idx === currentIndex ? 'bg-white w-4' : 'bg-white/50'
                                 }`}
                               />
                             ))}
@@ -484,15 +676,14 @@ export default function BrowsePage() {
                       <button
                         onClick={(e) => {
                           e.preventDefault();
+                          e.stopPropagation();
                           toggleFavorite(design.id);
                         }}
-                        className="absolute top-4 right-4 w-10 h-10 bg-white/90 backdrop-blur-sm rounded-full flex items-center justify-center shadow-md hover:bg-white transition-all duration-200 group/fav"
+                        className="absolute top-3 right-3 w-9 h-9 bg-white/90 rounded-full flex items-center justify-center hover:bg-white transition-all"
                       >
                         <Heart
-                          className={`w-5 h-5 transition-all duration-200 ${
-                            favorites.includes(design.id)
-                              ? 'fill-red-500 text-red-500'
-                              : 'text-gray-600 group-hover/fav:text-red-500'
+                          className={`w-5 h-5 ${
+                            isFavorite ? 'fill-red-500 text-red-500' : 'text-gray-700'
                           }`}
                         />
                       </button>
@@ -500,71 +691,50 @@ export default function BrowsePage() {
 
                     {/* Content */}
                     <div className="p-5">
-                      <Link href={`/design-detail?id=${design.id}`}>
-                        <h3 
-                          className="text-base font-semibold text-gray-900 mb-2 line-clamp-1 group-hover:text-gray-700 transition-colors"
-                          style={{ fontFamily: 'SF Pro Display, Inter, system-ui, sans-serif' }}
-                        >
-                          {design.name}
-                        </h3>
-                        <p className="text-sm text-gray-500 mb-3 line-clamp-2">
-                          {design.description || 'Premium interior design solution'}
+                      <h3 className="text-lg font-semibold text-gray-900 mb-2 group-hover:text-blue-600 transition-colors" style={{ fontFamily: 'SF Pro Display, Inter, system-ui, sans-serif' }}>
+                        {design.name}
+                      </h3>
+                      {design.description && (
+                        <p className="text-sm text-gray-600 line-clamp-2 mb-3">
+                          {design.description}
                         </p>
-                        <div className="flex items-center justify-between">
-                          <div>
-                            <p className="text-xs text-gray-400 mb-0.5">Starting from</p>
-                            <p className="text-lg font-semibold text-gray-900">
-                              ₹{design.price_per_sqft}
-                              <span className="text-sm font-normal text-gray-500">/sq ft</span>
-                            </p>
-                          </div>
-                          {design.finish_type && (
-                            <div className="px-3 py-1.5 bg-gray-50 rounded-lg">
-                              <p className="text-xs font-medium text-gray-600">
-                                {design.finish_type}
-                              </p>
-                            </div>
-                          )}
+                      )}
+                      
+                      {/* Tags */}
+                      {(design.tag_slugs?.length > 0 || design.material_slugs?.length > 0) && (
+                        <div className="flex flex-wrap gap-2">
+                          {design.material_slugs?.slice(0, 2).map((slug) => {
+                            const material = materials.find(m => m.slug === slug);
+                            return material ? (
+                              <span
+                                key={slug}
+                                className="px-2 py-1 bg-gray-100 text-gray-700 text-xs rounded-full"
+                              >
+                                {material.name}
+                              </span>
+                            ) : null;
+                          })}
+                          {design.tag_slugs?.slice(0, 2).map((slug) => {
+                            const tag = tags.find(t => t.slug === slug);
+                            return tag ? (
+                              <span
+                                key={slug}
+                                className="px-2 py-1 bg-blue-50 text-blue-700 text-xs rounded-full"
+                              >
+                                {tag.name}
+                              </span>
+                            ) : null;
+                          })}
                         </div>
-                      </Link>
+                      )}
                     </div>
-                  </div>
+                  </Link>
                 );
               })}
-            </div>
-          ) : (
-            <div className="text-center py-20 bg-white rounded-3xl border-2 border-dashed border-gray-200">
-              <div className="text-6xl mb-4">🎨</div>
-              <h3 className="text-xl font-semibold text-gray-900 mb-2">
-                No designs found
-              </h3>
-              <p className="text-gray-500 mb-6">
-                Try adjusting your filters or check back later
-              </p>
-              <button
-                onClick={() => {
-                  setSelectedSpace(null);
-                  setSelectedMaterials([]);
-                }}
-                className="px-6 py-3 bg-gray-900 text-white rounded-xl font-semibold hover:bg-gray-800 transition-all shadow-sm"
-              >
-                Clear All Filters
-              </button>
             </div>
           )}
         </section>
       </div>
-
-      {/* Hide scrollbar globally for slider */}
-      <style jsx global>{`
-        .scrollbar-hide::-webkit-scrollbar {
-          display: none;
-        }
-        .scrollbar-hide {
-          -ms-overflow-style: none;
-          scrollbar-width: none;
-        }
-      `}</style>
     </div>
   );
 }
