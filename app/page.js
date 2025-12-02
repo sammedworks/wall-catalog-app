@@ -1,7 +1,7 @@
 'use client';
-import { useState, useEffect, useRef } from 'react';
 import Link from 'next/link';
-import { ChevronLeft, ChevronRight, ArrowRight } from 'lucide-react';
+import { ArrowRight } from 'lucide-react';
+import ExploreByViewSlider from '@/components/ExploreByViewSlider';
 
 const SPACE_CATEGORIES = [
   { 
@@ -36,51 +36,7 @@ const SPACE_CATEGORIES = [
   },
 ];
 
-const LOOK_MATERIALS = [
-  { id: 'wood', name: 'Wood', color: '#8B4513' },
-  { id: 'marble', name: 'Marble', color: '#F5F5F5' },
-  { id: 'rattan', name: 'Rattan', color: '#D2B48C' },
-  { id: 'fabric', name: 'Fabric', color: '#E6E6FA' },
-  { id: 'limewash', name: 'Limewash', color: '#F0EAD6' },
-  { id: 'pastel', name: 'Pastel', color: '#FFB6C1' },
-  { id: 'stone', name: 'Stone', color: '#808080' },
-  { id: 'gold', name: 'Gold', color: '#FFD700' },
-  { id: 'traditional', name: 'Traditional', color: '#8B0000' },
-];
-
 export default function HomePage() {
-  const sliderRef = useRef(null);
-  const [canScrollLeft, setCanScrollLeft] = useState(false);
-  const [canScrollRight, setCanScrollRight] = useState(true);
-
-  useEffect(() => {
-    checkScrollButtons();
-  }, []);
-
-  const scrollSlider = (direction) => {
-    if (!sliderRef.current) return;
-    
-    const scrollAmount = 300;
-    const newScrollLeft = sliderRef.current.scrollLeft + (direction === 'left' ? -scrollAmount : scrollAmount);
-    
-    sliderRef.current.scrollTo({
-      left: newScrollLeft,
-      behavior: 'smooth'
-    });
-  };
-
-  const checkScrollButtons = () => {
-    if (!sliderRef.current) return;
-    
-    const { scrollLeft, scrollWidth, clientWidth } = sliderRef.current;
-    setCanScrollLeft(scrollLeft > 0);
-    setCanScrollRight(scrollLeft < scrollWidth - clientWidth - 10);
-  };
-
-  const handleSliderScroll = () => {
-    checkScrollButtons();
-  };
-
   return (
     <div className="min-h-screen bg-white">
       {/* Header */}
@@ -139,73 +95,12 @@ export default function HomePage() {
             ))}
           </div>
         </section>
+      </div>
 
-        {/* Section 2: Explore by View (Looks) */}
-        <section className="mb-20">
-          <div className="mb-8">
-            <h2 className="text-3xl font-bold text-gray-900 mb-2">Explore by View</h2>
-            <p className="text-gray-600">Browse designs by material and finish</p>
-          </div>
+      {/* Section 2: Explore by View (New Slider Component) */}
+      <ExploreByViewSlider />
 
-          <div className="relative group">
-            {/* Left Scroll Button */}
-            {canScrollLeft && (
-              <button
-                onClick={() => scrollSlider('left')}
-                className="absolute left-0 top-1/2 -translate-y-1/2 z-10 w-12 h-12 bg-white shadow-xl rounded-full flex items-center justify-center hover:bg-gray-50 transition-all opacity-0 group-hover:opacity-100"
-                style={{ marginLeft: '-24px' }}
-              >
-                <ChevronLeft className="w-6 h-6 text-gray-700" />
-              </button>
-            )}
-
-            {/* Slider Container */}
-            <div
-              ref={sliderRef}
-              onScroll={handleSliderScroll}
-              className="flex gap-6 overflow-x-auto scrollbar-hide scroll-smooth pb-4"
-            >
-              {LOOK_MATERIALS.map((look) => (
-                <Link
-                  key={look.id}
-                  href={`/designs?look=${look.id}`}
-                  className="flex-shrink-0 group/item transition-all duration-200 hover:scale-105"
-                >
-                  <div className="flex flex-col items-center gap-3">
-                    {/* Material Circle */}
-                    <div
-                      className="w-32 h-32 rounded-full shadow-lg overflow-hidden transition-all duration-200 group-hover/item:shadow-2xl border-4 border-white"
-                      style={{ backgroundColor: look.color }}
-                    >
-                      <div className="w-full h-full flex items-center justify-center">
-                        <span className="text-white font-bold text-lg drop-shadow-lg">
-                          {look.name}
-                        </span>
-                      </div>
-                    </div>
-                    
-                    {/* Material Name */}
-                    <span className="text-base font-semibold text-gray-900 group-hover/item:text-gray-700 transition-colors">
-                      {look.name}
-                    </span>
-                  </div>
-                </Link>
-              ))}
-            </div>
-
-            {/* Right Scroll Button */}
-            {canScrollRight && (
-              <button
-                onClick={() => scrollSlider('right')}
-                className="absolute right-0 top-1/2 -translate-y-1/2 z-10 w-12 h-12 bg-white shadow-xl rounded-full flex items-center justify-center hover:bg-gray-50 transition-all opacity-0 group-hover:opacity-100"
-                style={{ marginRight: '-24px' }}
-              >
-                <ChevronRight className="w-6 h-6 text-gray-700" />
-              </button>
-            )}
-          </div>
-        </section>
-
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-12">
         {/* Section 3: Explore All Designs */}
         <section>
           <div className="bg-gradient-to-br from-gray-900 to-gray-800 rounded-3xl shadow-2xl overflow-hidden">
@@ -227,17 +122,6 @@ export default function HomePage() {
           </div>
         </section>
       </div>
-
-      {/* Hide scrollbar */}
-      <style jsx global>{`
-        .scrollbar-hide::-webkit-scrollbar {
-          display: none;
-        }
-        .scrollbar-hide {
-          -ms-overflow-style: none;
-          scrollbar-width: none;
-        }
-      `}</style>
     </div>
   );
 }
