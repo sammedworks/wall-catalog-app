@@ -3,7 +3,7 @@ import { useState, useEffect } from 'react';
 import { useSearchParams, useRouter } from 'next/navigation';
 import { supabase } from '@/lib/supabase';
 import Link from 'next/link';
-import { ArrowLeft, ZoomIn, Save, FileText, Plus, Minus, ChevronLeft, ChevronRight } from 'lucide-react';
+import { ArrowLeft, ZoomIn, FileText, Plus, Minus, ChevronLeft, ChevronRight } from 'lucide-react';
 
 const MATERIALS = [
   { id: 'walnut', name: 'Walnut Wood', type: 'Wood', priceAdjustment: 2000, color: '#5D4037' },
@@ -115,23 +115,6 @@ export default function DesignDetailPage() {
       total: total,
       rounded: Math.round(total / 1000) * 1000
     };
-  };
-
-  const handleSaveDesign = () => {
-    const savedDesigns = JSON.parse(localStorage.getItem('savedDesigns') || '[]');
-    const designData = {
-      id: design.id,
-      name: design.name,
-      image: images[0],
-      material: selectedMaterial,
-      addons: selectedAddons,
-      area: area,
-      cost: calculateCost(),
-      savedAt: new Date().toISOString()
-    };
-    savedDesigns.push(designData);
-    localStorage.setItem('savedDesigns', JSON.stringify(savedDesigns));
-    alert('Design saved successfully!');
   };
 
   const handleCreateQuote = () => {
@@ -396,23 +379,13 @@ export default function DesignDetailPage() {
                 </div>
               </div>
 
-              <div className="space-y-3">
-                <button
-                  onClick={handleCreateQuote}
-                  className="w-full py-4 bg-gradient-to-r from-blue-600 to-blue-700 text-white rounded-xl font-bold hover:from-blue-700 hover:to-blue-800 transition-all shadow-lg flex items-center justify-center gap-2"
-                >
-                  <FileText className="w-5 h-5" />
-                  Get Quote
-                </button>
-                
-                <button
-                  onClick={handleSaveDesign}
-                  className="w-full py-4 bg-gray-100 text-gray-900 rounded-xl font-semibold hover:bg-gray-200 transition-all flex items-center justify-center gap-2"
-                >
-                  <Save className="w-5 h-5" />
-                  Save Design
-                </button>
-              </div>
+              <button
+                onClick={handleCreateQuote}
+                className="w-full py-4 bg-gradient-to-r from-blue-600 to-blue-700 text-white rounded-xl font-bold hover:from-blue-700 hover:to-blue-800 transition-all shadow-lg flex items-center justify-center gap-2"
+              >
+                <FileText className="w-5 h-5" />
+                Get Quote
+              </button>
             </div>
           </div>
         </div>
