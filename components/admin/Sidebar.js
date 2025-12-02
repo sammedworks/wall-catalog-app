@@ -5,7 +5,8 @@ import {
   LayoutDashboard, 
   Package, 
   Tags, 
-  Image, 
+  Filter,
+  Layers,
   FileText, 
   Mail, 
   Settings,
@@ -19,11 +20,12 @@ export default function Sidebar({ onLogout }) {
 
   const menuItems = [
     { icon: LayoutDashboard, label: 'Dashboard', href: '/admin' },
-    { icon: Package, label: 'Products', href: '/admin/products' },
+    { icon: Package, label: 'Designs', href: '/admin/products' },
+    { icon: Layers, label: 'Materials', href: '/admin/materials' },
     { icon: Tags, label: 'Tags', href: '/admin/tags' },
-    { icon: Image, label: 'Sliders', href: '/admin/sliders' },
-    { icon: FileText, label: 'Quotations', href: '/admin/quotations' },
+    { icon: Filter, label: 'Filters', href: '/admin/filters' },
     { icon: Mail, label: 'Enquiries', href: '/admin/enquiries' },
+    { icon: FileText, label: 'Quotations', href: '/admin/quotations' },
     { icon: Users, label: 'Customers', href: '/admin/customers' },
     { icon: BarChart3, label: 'Analytics', href: '/admin/analytics' },
     { icon: Settings, label: 'Settings', href: '/admin/settings' },
@@ -45,7 +47,7 @@ export default function Sidebar({ onLogout }) {
       </div>
 
       {/* Menu Items */}
-      <nav className="flex-1 p-4 space-y-1">
+      <nav className="flex-1 p-4 space-y-1 overflow-y-auto">
         {menuItems.map((item) => {
           const Icon = item.icon;
           const isActive = pathname === item.href;
