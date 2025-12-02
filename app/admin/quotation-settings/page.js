@@ -1,7 +1,7 @@
 'use client';
 import { useState, useEffect } from 'react';
 import { supabase } from '@/lib/supabase';
-import { Plus, Edit, Trash2, Save, X, DollarSign, Settings, Package, Lightbulb, Wrench, Palette } from 'lucide-react';
+import { Plus, Edit, Trash2, Save, X, DollarSign, Settings, Package, Lightbulb, Wrench, Palette, Upload, Image as ImageIcon } from 'lucide-react';
 
 export default function QuotationSettingsPage() {
   const [activeTab, setActiveTab] = useState('panels');
@@ -19,6 +19,7 @@ export default function QuotationSettingsPage() {
   const [formData, setFormData] = useState({});
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
+  const [uploading, setUploading] = useState(false);
 
   useEffect(() => {
     loadAllData();
@@ -26,6 +27,10 @@ export default function QuotationSettingsPage() {
 
   const loadAllData = async () => {
     try {
+      setLoading(true);
+      
+      console.log('Loading all data...');
+      
       const [panels, furn, light, acc, config] = await Promise.all([
         supabase.from('panel_materials').select('*').order('display_order'),
         supabase.from('modular_furniture').select('*').order('display_order'),
@@ -33,17 +38,47 @@ export default function QuotationSettingsPage() {
         supabase.from('installation_accessories').select('*').order('display_order'),
         supabase.from('pricing_config').select('*')
       ]);
+
+      console.log('Panels response:', panels);
+      console.log('Furniture response:', furn);
+      console.log('Lighting response:', light);
+      console.log('Accessories response:', acc);
+      console.log('Config response:', config);
       
+      if (panels.error) {
+        console.error('Panels error:', panels.error);
+        throw panels.error;
+      }
+      if (furn.error) {
+        console.error('Furniture error:', furn.error);
+        throw furn.error;
+      }
+      if (light.error) {
+        console.error('Lighting error:', light.error);
+        throw light.error;
+      }
+      if (acc.error) {
+        console.error('Accessories error:', acc.error);
+        throw acc.error;
+      }
+      if (config.error) {
+        console.error('Config error:', config.error);
+        throw config.error;
+      }
+
       setPanelMaterials(panels.data || []);
       setFurniture(furn.data || []);
       setLighting(light.data || []);
       setAccessories(acc.data || []);
       
+      // Parse pricing config
       const configObj = {};
       config.data?.forEach(item => {
         configObj[item.config_key] = item.config_value;
       });
       setPricingConfig(configObj);
+      
+      console.log('Data loaded successfully');
       
     } catch (error) {
       console.error('Error loading data:', error);
@@ -53,24 +88,97 @@ export default function QuotationSettingsPage() {
     }
   };
 
+  // Photo Upload
+  const uploadPhoto = async (file, table) => {
+    try {
+      setUploading(true);
+      
+      const fileExt = file.name.split('.').pop();
+      const fileName = `${table}/${Date.now()}.${fileExt}`;
+      
+      console.log('Uploading file:', fileName);
+      
+      const { data, error } = await supabase.storage
+        .from('product-photos')
+        .upload(fileName, file, {
+          cacheControl: '3600',
+          upsert: false
+        });
+
+      if (error) {
+        console.error('Upload error:', error);
+        throw error;
+      }
+
+      console.log('Upload successful:', data);
+
+      const { data: { publicUrl } } = supabase.storage
+        .from('product-photos')
+        .getPublicUrl(fileName);
+
+      console.log('Public URL:', publicUrl);
+
+      return publicUrl;
+      
+    } catch (error) {
+      console.error('Error uploading photo:', error);
+      alert('Failed to upload photo: ' + error.message);
+      return null;
+    } finally {
+      setUploading(false);
+    }
+  };
+
+  const handlePhotoUpload = async (e, table) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    const photoUrl = await uploadPhoto(file, table);
+    if (photoUrl) {
+      setFormData({ ...formData, photo_url: photoUrl });
+    }
+  };
+
+  // Toggle section expansion
+  const toggleSection = (section) => {
+    setExpandedSections(prev => ({
+      ...prev,
+      [section]: !prev[section]
+    }));
+  };
+
   // Generic save function
   const saveItem = async (table, data) => {
     try {
       setSaving(true);
+      console.log('Saving to table:', table);
+      console.log('Data:', data);
+      
       if (editingItem) {
+        console.log('Updating item:', editingItem.id);
         const { error } = await supabase.from(table).update(data).eq('id', editingItem.id);
-        if (error) throw error;
+        if (error) {
+          console.error('Update error:', error);
+          throw error;
+        }
+        console.log('Update successful');
       } else {
+        console.log('Inserting new item');
         const { error } = await supabase.from(table).insert(data);
-        if (error) throw error;
+        if (error) {
+          console.error('Insert error:', error);
+          throw error;
+        }
+        console.log('Insert successful');
       }
+      
       await loadAllData();
       setShowForm(false);
       setEditingItem(null);
       setFormData({});
       alert('Saved successfully!');
     } catch (error) {
-      console.error('Error:', error);
+      console.error('Error saving:', error);
       alert('Failed to save: ' + error.message);
     } finally {
       setSaving(false);
@@ -81,12 +189,17 @@ export default function QuotationSettingsPage() {
   const deleteItem = async (table, id) => {
     if (!confirm('Are you sure you want to delete this item?')) return;
     try {
+      console.log('Deleting from table:', table, 'ID:', id);
       const { error } = await supabase.from(table).delete().eq('id', id);
-      if (error) throw error;
+      if (error) {
+        console.error('Delete error:', error);
+        throw error;
+      }
+      console.log('Delete successful');
       await loadAllData();
       alert('Deleted successfully!');
     } catch (error) {
-      console.error('Error:', error);
+      console.error('Error deleting:', error);
       alert('Failed to delete: ' + error.message);
     }
   };
@@ -94,20 +207,26 @@ export default function QuotationSettingsPage() {
   // Update pricing config
   const updatePricingConfig = async (key, value) => {
     try {
+      console.log('Updating pricing config:', key, value);
       const { error } = await supabase
         .from('pricing_config')
         .upsert({ config_key: key, config_value: value }, { onConflict: 'config_key' });
-      if (error) throw error;
+      if (error) {
+        console.error('Config update error:', error);
+        throw error;
+      }
+      console.log('Config update successful');
       await loadAllData();
       alert('Updated successfully!');
     } catch (error) {
-      console.error('Error:', error);
+      console.error('Error updating config:', error);
       alert('Failed to update: ' + error.message);
     }
   };
 
   // Open form for editing
   const openEditForm = (item) => {
+    console.log('Opening edit form for:', item);
     setEditingItem(item);
     setFormData(item);
     setShowForm(true);
@@ -115,6 +234,7 @@ export default function QuotationSettingsPage() {
 
   // Open form for new item
   const openNewForm = () => {
+    console.log('Opening new form');
     setEditingItem(null);
     setFormData({
       name: '',
@@ -209,6 +329,36 @@ export default function QuotationSettingsPage() {
                   </div>
                   
                   <div className="p-6 space-y-4">
+                    {/* Photo Upload */}
+                    <div>
+                      <label className="block text-sm font-semibold mb-2">Photo</label>
+                      <div className="flex items-center gap-4">
+                        {formData.photo_url && (
+                          <img 
+                            src={formData.photo_url} 
+                            alt="Preview" 
+                            className="w-32 h-32 object-cover rounded-lg border-2 border-gray-300"
+                          />
+                        )}
+                        <div className="flex-1">
+                          <label className="cursor-pointer">
+                            <div className="px-4 py-2 bg-gray-100 border-2 border-gray-300 rounded-lg hover:bg-gray-200 flex items-center gap-2 justify-center">
+                              <Upload className="w-5 h-5" />
+                              {uploading ? 'Uploading...' : 'Upload Photo'}
+                            </div>
+                            <input
+                              type="file"
+                              accept="image/*"
+                              onChange={(e) => handlePhotoUpload(e, 'panels')}
+                              className="hidden"
+                              disabled={uploading}
+                            />
+                          </label>
+                          <p className="text-xs text-gray-500 mt-1">Recommended: 400x400px, JPG/PNG</p>
+                        </div>
+                      </div>
+                    </div>
+
                     <div>
                       <label className="block text-sm font-semibold mb-2">Name *</label>
                       <input
@@ -265,6 +415,7 @@ export default function QuotationSettingsPage() {
                         className="w-full px-4 py-2 border-2 border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
                         placeholder="500"
                         min="0"
+                        step="0.01"
                       />
                     </div>
 
@@ -297,7 +448,7 @@ export default function QuotationSettingsPage() {
                         onChange={(e) => setFormData({ ...formData, is_active: e.target.checked })}
                         className="w-5 h-5"
                       />
-                      <label className="text-sm font-semibold">Active</label>
+                      <label className="text-sm font-semibold">Active (Show in quotation builder)</label>
                     </div>
                   </div>
 
@@ -326,6 +477,7 @@ export default function QuotationSettingsPage() {
               <table className="w-full">
                 <thead className="bg-gray-50 border-b">
                   <tr>
+                    <th className="px-6 py-4 text-left text-xs font-semibold text-gray-600 uppercase">Photo</th>
                     <th className="px-6 py-4 text-left text-xs font-semibold text-gray-600 uppercase">Material</th>
                     <th className="px-6 py-4 text-left text-xs font-semibold text-gray-600 uppercase">Type</th>
                     <th className="px-6 py-4 text-left text-xs font-semibold text-gray-600 uppercase">Rate/sq.ft</th>
@@ -336,13 +488,29 @@ export default function QuotationSettingsPage() {
                 <tbody className="divide-y">
                   {panelMaterials.length === 0 ? (
                     <tr>
-                      <td colSpan="5" className="px-6 py-8 text-center text-gray-500">
+                      <td colSpan="6" className="px-6 py-8 text-center text-gray-500">
                         No panel materials found. Click "Add Material" to create one.
                       </td>
                     </tr>
                   ) : (
                     panelMaterials.map((item) => (
                       <tr key={item.id} className="hover:bg-gray-50">
+                        <td className="px-6 py-4">
+                          {item.photo_url ? (
+                            <img 
+                              src={item.photo_url} 
+                              alt={item.name}
+                              className="w-16 h-16 object-cover rounded-lg border-2 border-gray-200"
+                            />
+                          ) : (
+                            <div
+                              className="w-16 h-16 rounded-lg border-2 border-gray-200 flex items-center justify-center"
+                              style={{ backgroundColor: item.color_code || '#ccc' }}
+                            >
+                              <ImageIcon className="w-6 h-6 text-white opacity-50" />
+                            </div>
+                          )}
+                        </td>
                         <td className="px-6 py-4">
                           <div className="flex items-center gap-3">
                             <div
@@ -374,607 +542,6 @@ export default function QuotationSettingsPage() {
                             <button
                               onClick={() => deleteItem('panel_materials', item.id)}
                               className="p-2 hover:bg-red-100 rounded-lg transition-all"
-                            >
-                              <Trash2 className="w-5 h-5 text-red-600" />
-                            </button>
-                          </div>
-                        </td>
-                      </tr>
-                    ))
-                  )}
-                </tbody>
-              </table>
-            </div>
-          </div>
-        )}
-
-        {/* Furniture Tab */}
-        {activeTab === 'furniture' && (
-          <div className="space-y-6">
-            <div className="flex justify-between items-center">
-              <h2 className="text-2xl font-bold">Modular Furniture</h2>
-              <button
-                onClick={() => {
-                  setEditingItem(null);
-                  setFormData({ name: '', size: '', price: 0, colors: [], is_active: true, display_order: 0 });
-                  setShowForm(true);
-                }}
-                className="px-4 py-2 bg-blue-600 text-white rounded-lg flex items-center gap-2 hover:bg-blue-700"
-              >
-                <Plus className="w-5 h-5" /> Add Furniture
-              </button>
-            </div>
-
-            {/* Furniture Form Modal */}
-            {showForm && (
-              <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
-                <div className="bg-white rounded-2xl shadow-2xl max-w-2xl w-full max-h-[90vh] overflow-y-auto">
-                  <div className="p-6 border-b border-gray-200 flex justify-between items-center sticky top-0 bg-white">
-                    <h3 className="text-xl font-bold">
-                      {editingItem ? 'Edit Furniture' : 'Add Furniture'}
-                    </h3>
-                    <button onClick={() => setShowForm(false)} className="p-2 hover:bg-gray-100 rounded-lg">
-                      <X className="w-6 h-6" />
-                    </button>
-                  </div>
-                  
-                  <div className="p-6 space-y-4">
-                    <div>
-                      <label className="block text-sm font-semibold mb-2">Name *</label>
-                      <input
-                        type="text"
-                        value={formData.name || ''}
-                        onChange={(e) => setFormData({ ...formData, name: e.target.value })}
-                        className="w-full px-4 py-2 border-2 border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-                        placeholder="e.g., Grooveline Console"
-                      />
-                    </div>
-
-                    <div>
-                      <label className="block text-sm font-semibold mb-2">Category</label>
-                      <select
-                        value={formData.category || ''}
-                        onChange={(e) => setFormData({ ...formData, category: e.target.value })}
-                        className="w-full px-4 py-2 border-2 border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-                      >
-                        <option value="">Select category</option>
-                        <option value="Console">Console</option>
-                        <option value="Cabinet">Cabinet</option>
-                        <option value="Shelf">Shelf</option>
-                        <option value="Table">Table</option>
-                        <option value="Storage">Storage</option>
-                      </select>
-                    </div>
-
-                    <div>
-                      <label className="block text-sm font-semibold mb-2">Size *</label>
-                      <input
-                        type="text"
-                        value={formData.size || ''}
-                        onChange={(e) => setFormData({ ...formData, size: e.target.value })}
-                        className="w-full px-4 py-2 border-2 border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-                        placeholder="e.g., 4 ft"
-                      />
-                    </div>
-
-                    <div>
-                      <label className="block text-sm font-semibold mb-2">Price (₹) *</label>
-                      <input
-                        type="number"
-                        value={formData.price || ''}
-                        onChange={(e) => setFormData({ ...formData, price: parseFloat(e.target.value) })}
-                        className="w-full px-4 py-2 border-2 border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-                        placeholder="7999"
-                        min="0"
-                      />
-                    </div>
-
-                    <div>
-                      <label className="block text-sm font-semibold mb-2">Colors (comma-separated) *</label>
-                      <input
-                        type="text"
-                        value={Array.isArray(formData.colors) ? formData.colors.join(', ') : ''}
-                        onChange={(e) => setFormData({ ...formData, colors: e.target.value.split(',').map(c => c.trim()).filter(c => c) })}
-                        className="w-full px-4 py-2 border-2 border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-                        placeholder="White, Beige, Walnut, Grey, Black, Teak"
-                      />
-                      <p className="text-xs text-gray-500 mt-1">Enter colors separated by commas</p>
-                    </div>
-
-                    <div>
-                      <label className="block text-sm font-semibold mb-2">Description</label>
-                      <textarea
-                        value={formData.description || ''}
-                        onChange={(e) => setFormData({ ...formData, description: e.target.value })}
-                        className="w-full px-4 py-2 border-2 border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-                        rows="3"
-                      />
-                    </div>
-
-                    <div>
-                      <label className="block text-sm font-semibold mb-2">Display Order</label>
-                      <input
-                        type="number"
-                        value={formData.display_order || 0}
-                        onChange={(e) => setFormData({ ...formData, display_order: parseInt(e.target.value) })}
-                        className="w-full px-4 py-2 border-2 border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-                        min="0"
-                      />
-                    </div>
-
-                    <div className="flex items-center gap-2">
-                      <input
-                        type="checkbox"
-                        checked={formData.is_active !== false}
-                        onChange={(e) => setFormData({ ...formData, is_active: e.target.checked })}
-                        className="w-5 h-5"
-                      />
-                      <label className="text-sm font-semibold">Active</label>
-                    </div>
-                  </div>
-
-                  <div className="p-6 border-t border-gray-200 flex gap-3">
-                    <button
-                      onClick={() => setShowForm(false)}
-                      className="flex-1 px-4 py-3 bg-gray-100 text-gray-700 rounded-lg font-semibold hover:bg-gray-200"
-                    >
-                      Cancel
-                    </button>
-                    <button
-                      onClick={() => saveItem('modular_furniture', formData)}
-                      disabled={saving || !formData.name || !formData.size || !formData.price}
-                      className="flex-1 px-4 py-3 bg-blue-600 text-white rounded-lg font-semibold hover:bg-blue-700 disabled:opacity-50 flex items-center justify-center gap-2"
-                    >
-                      <Save className="w-5 h-5" />
-                      {saving ? 'Saving...' : 'Save Furniture'}
-                    </button>
-                  </div>
-                </div>
-              </div>
-            )}
-
-            {/* Furniture Table */}
-            <div className="bg-white rounded-xl shadow-lg overflow-hidden">
-              <table className="w-full">
-                <thead className="bg-gray-50 border-b">
-                  <tr>
-                    <th className="px-6 py-4 text-left text-xs font-semibold text-gray-600 uppercase">Name</th>
-                    <th className="px-6 py-4 text-left text-xs font-semibold text-gray-600 uppercase">Size</th>
-                    <th className="px-6 py-4 text-left text-xs font-semibold text-gray-600 uppercase">Price</th>
-                    <th className="px-6 py-4 text-left text-xs font-semibold text-gray-600 uppercase">Colors</th>
-                    <th className="px-6 py-4 text-left text-xs font-semibold text-gray-600 uppercase">Status</th>
-                    <th className="px-6 py-4 text-right text-xs font-semibold text-gray-600 uppercase">Actions</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y">
-                  {furniture.length === 0 ? (
-                    <tr>
-                      <td colSpan="6" className="px-6 py-8 text-center text-gray-500">
-                        No furniture items found. Click "Add Furniture" to create one.
-                      </td>
-                    </tr>
-                  ) : (
-                    furniture.map((item) => (
-                      <tr key={item.id} className="hover:bg-gray-50">
-                        <td className="px-6 py-4 font-semibold">{item.name}</td>
-                        <td className="px-6 py-4">{item.size}</td>
-                        <td className="px-6 py-4">
-                          <span className="font-bold text-green-600">₹{item.price?.toLocaleString('en-IN')}</span>
-                        </td>
-                        <td className="px-6 py-4">
-                          <div className="flex flex-wrap gap-1">
-                            {item.colors?.slice(0, 3).map((color, idx) => (
-                              <span key={idx} className="px-2 py-1 bg-gray-100 rounded text-xs">
-                                {color}
-                              </span>
-                            ))}
-                            {item.colors?.length > 3 && (
-                              <span className="px-2 py-1 bg-gray-100 rounded text-xs">
-                                +{item.colors.length - 3}
-                              </span>
-                            )}
-                          </div>
-                        </td>
-                        <td className="px-6 py-4">
-                          <span className={`px-3 py-1 rounded-full text-sm font-semibold ${
-                            item.is_active ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'
-                          }`}>
-                            {item.is_active ? 'Active' : 'Inactive'}
-                          </span>
-                        </td>
-                        <td className="px-6 py-4">
-                          <div className="flex items-center justify-end gap-2">
-                            <button
-                              onClick={() => openEditForm(item)}
-                              className="p-2 hover:bg-blue-100 rounded-lg"
-                            >
-                              <Edit className="w-5 h-5 text-blue-600" />
-                            </button>
-                            <button
-                              onClick={() => deleteItem('modular_furniture', item.id)}
-                              className="p-2 hover:bg-red-100 rounded-lg"
-                            >
-                              <Trash2 className="w-5 h-5 text-red-600" />
-                            </button>
-                          </div>
-                        </td>
-                      </tr>
-                    ))
-                  )}
-                </tbody>
-              </table>
-            </div>
-          </div>
-        )}
-
-        {/* Lighting Tab */}
-        {activeTab === 'lighting' && (
-          <div className="space-y-6">
-            <div className="flex justify-between items-center">
-              <h2 className="text-2xl font-bold">Lighting Options</h2>
-              <button
-                onClick={() => {
-                  setEditingItem(null);
-                  setFormData({ name: '', category: 'Profile Light', price: 0, unit: 'piece', is_active: true, display_order: 0 });
-                  setShowForm(true);
-                }}
-                className="px-4 py-2 bg-blue-600 text-white rounded-lg flex items-center gap-2 hover:bg-blue-700"
-              >
-                <Plus className="w-5 h-5" /> Add Lighting
-              </button>
-            </div>
-
-            {/* Lighting Form Modal */}
-            {showForm && (
-              <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
-                <div className="bg-white rounded-2xl shadow-2xl max-w-2xl w-full max-h-[90vh] overflow-y-auto">
-                  <div className="p-6 border-b border-gray-200 flex justify-between items-center sticky top-0 bg-white">
-                    <h3 className="text-xl font-bold">
-                      {editingItem ? 'Edit Lighting' : 'Add Lighting'}
-                    </h3>
-                    <button onClick={() => setShowForm(false)} className="p-2 hover:bg-gray-100 rounded-lg">
-                      <X className="w-6 h-6" />
-                    </button>
-                  </div>
-                  
-                  <div className="p-6 space-y-4">
-                    <div>
-                      <label className="block text-sm font-semibold mb-2">Name *</label>
-                      <input
-                        type="text"
-                        value={formData.name || ''}
-                        onChange={(e) => setFormData({ ...formData, name: e.target.value })}
-                        className="w-full px-4 py-2 border-2 border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-                        placeholder="e.g., 240 LED Installation Kit"
-                      />
-                    </div>
-
-                    <div>
-                      <label className="block text-sm font-semibold mb-2">Category *</label>
-                      <select
-                        value={formData.category || 'Profile Light'}
-                        onChange={(e) => setFormData({ ...formData, category: e.target.value })}
-                        className="w-full px-4 py-2 border-2 border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-                      >
-                        <option value="Profile Light">Profile Light</option>
-                        <option value="Cove Light">Cove Light</option>
-                        <option value="Wall Light">Wall Light</option>
-                      </select>
-                    </div>
-
-                    <div>
-                      <label className="block text-sm font-semibold mb-2">Price (₹) *</label>
-                      <input
-                        type="number"
-                        value={formData.price || ''}
-                        onChange={(e) => setFormData({ ...formData, price: parseFloat(e.target.value) })}
-                        className="w-full px-4 py-2 border-2 border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-                        placeholder="2500"
-                        min="0"
-                      />
-                    </div>
-
-                    <div>
-                      <label className="block text-sm font-semibold mb-2">Unit</label>
-                      <select
-                        value={formData.unit || 'piece'}
-                        onChange={(e) => setFormData({ ...formData, unit: e.target.value })}
-                        className="w-full px-4 py-2 border-2 border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-                      >
-                        <option value="piece">Piece</option>
-                        <option value="meter">Meter</option>
-                        <option value="set">Set</option>
-                      </select>
-                    </div>
-
-                    <div>
-                      <label className="block text-sm font-semibold mb-2">Description</label>
-                      <textarea
-                        value={formData.description || ''}
-                        onChange={(e) => setFormData({ ...formData, description: e.target.value })}
-                        className="w-full px-4 py-2 border-2 border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-                        rows="3"
-                      />
-                    </div>
-
-                    <div>
-                      <label className="block text-sm font-semibold mb-2">Display Order</label>
-                      <input
-                        type="number"
-                        value={formData.display_order || 0}
-                        onChange={(e) => setFormData({ ...formData, display_order: parseInt(e.target.value) })}
-                        className="w-full px-4 py-2 border-2 border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-                        min="0"
-                      />
-                    </div>
-
-                    <div className="flex items-center gap-2">
-                      <input
-                        type="checkbox"
-                        checked={formData.is_active !== false}
-                        onChange={(e) => setFormData({ ...formData, is_active: e.target.checked })}
-                        className="w-5 h-5"
-                      />
-                      <label className="text-sm font-semibold">Active</label>
-                    </div>
-                  </div>
-
-                  <div className="p-6 border-t border-gray-200 flex gap-3">
-                    <button
-                      onClick={() => setShowForm(false)}
-                      className="flex-1 px-4 py-3 bg-gray-100 text-gray-700 rounded-lg font-semibold hover:bg-gray-200"
-                    >
-                      Cancel
-                    </button>
-                    <button
-                      onClick={() => saveItem('lighting_options', formData)}
-                      disabled={saving || !formData.name || !formData.price}
-                      className="flex-1 px-4 py-3 bg-blue-600 text-white rounded-lg font-semibold hover:bg-blue-700 disabled:opacity-50 flex items-center justify-center gap-2"
-                    >
-                      <Save className="w-5 h-5" />
-                      {saving ? 'Saving...' : 'Save Lighting'}
-                    </button>
-                  </div>
-                </div>
-              </div>
-            )}
-
-            {/* Lighting Table */}
-            <div className="bg-white rounded-xl shadow-lg overflow-hidden">
-              <table className="w-full">
-                <thead className="bg-gray-50 border-b">
-                  <tr>
-                    <th className="px-6 py-4 text-left text-xs font-semibold text-gray-600 uppercase">Name</th>
-                    <th className="px-6 py-4 text-left text-xs font-semibold text-gray-600 uppercase">Category</th>
-                    <th className="px-6 py-4 text-left text-xs font-semibold text-gray-600 uppercase">Price</th>
-                    <th className="px-6 py-4 text-left text-xs font-semibold text-gray-600 uppercase">Unit</th>
-                    <th className="px-6 py-4 text-left text-xs font-semibold text-gray-600 uppercase">Status</th>
-                    <th className="px-6 py-4 text-right text-xs font-semibold text-gray-600 uppercase">Actions</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y">
-                  {lighting.length === 0 ? (
-                    <tr>
-                      <td colSpan="6" className="px-6 py-8 text-center text-gray-500">
-                        No lighting options found. Click "Add Lighting" to create one.
-                      </td>
-                    </tr>
-                  ) : (
-                    lighting.map((item) => (
-                      <tr key={item.id} className="hover:bg-gray-50">
-                        <td className="px-6 py-4 font-semibold">{item.name}</td>
-                        <td className="px-6 py-4">
-                          <span className="px-3 py-1 bg-blue-100 text-blue-800 rounded-full text-sm">
-                            {item.category}
-                          </span>
-                        </td>
-                        <td className="px-6 py-4">
-                          <span className="font-bold text-green-600">₹{item.price?.toLocaleString('en-IN')}</span>
-                        </td>
-                        <td className="px-6 py-4">{item.unit}</td>
-                        <td className="px-6 py-4">
-                          <span className={`px-3 py-1 rounded-full text-sm font-semibold ${
-                            item.is_active ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'
-                          }`}>
-                            {item.is_active ? 'Active' : 'Inactive'}
-                          </span>
-                        </td>
-                        <td className="px-6 py-4">
-                          <div className="flex items-center justify-end gap-2">
-                            <button
-                              onClick={() => openEditForm(item)}
-                              className="p-2 hover:bg-blue-100 rounded-lg"
-                            >
-                              <Edit className="w-5 h-5 text-blue-600" />
-                            </button>
-                            <button
-                              onClick={() => deleteItem('lighting_options', item.id)}
-                              className="p-2 hover:bg-red-100 rounded-lg"
-                            >
-                              <Trash2 className="w-5 h-5 text-red-600" />
-                            </button>
-                          </div>
-                        </td>
-                      </tr>
-                    ))
-                  )}
-                </tbody>
-              </table>
-            </div>
-          </div>
-        )}
-
-        {/* Accessories Tab */}
-        {activeTab === 'accessories' && (
-          <div className="space-y-6">
-            <div className="flex justify-between items-center">
-              <h2 className="text-2xl font-bold">Installation Accessories</h2>
-              <button
-                onClick={() => {
-                  setEditingItem(null);
-                  setFormData({ name: '', price: 0, unit: 'fixed', is_active: true, display_order: 0 });
-                  setShowForm(true);
-                }}
-                className="px-4 py-2 bg-blue-600 text-white rounded-lg flex items-center gap-2 hover:bg-blue-700"
-              >
-                <Plus className="w-5 h-5" /> Add Accessory
-              </button>
-            </div>
-
-            {/* Accessory Form Modal */}
-            {showForm && (
-              <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
-                <div className="bg-white rounded-2xl shadow-2xl max-w-2xl w-full max-h-[90vh] overflow-y-auto">
-                  <div className="p-6 border-b border-gray-200 flex justify-between items-center sticky top-0 bg-white">
-                    <h3 className="text-xl font-bold">
-                      {editingItem ? 'Edit Accessory' : 'Add Accessory'}
-                    </h3>
-                    <button onClick={() => setShowForm(false)} className="p-2 hover:bg-gray-100 rounded-lg">
-                      <X className="w-6 h-6" />
-                    </button>
-                  </div>
-                  
-                  <div className="p-6 space-y-4">
-                    <div>
-                      <label className="block text-sm font-semibold mb-2">Name *</label>
-                      <input
-                        type="text"
-                        value={formData.name || ''}
-                        onChange={(e) => setFormData({ ...formData, name: e.target.value })}
-                        className="w-full px-4 py-2 border-2 border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-                        placeholder="e.g., PVC Board (12mm)"
-                      />
-                    </div>
-
-                    <div>
-                      <label className="block text-sm font-semibold mb-2">Price (₹) *</label>
-                      <input
-                        type="number"
-                        value={formData.price || ''}
-                        onChange={(e) => setFormData({ ...formData, price: parseFloat(e.target.value) })}
-                        className="w-full px-4 py-2 border-2 border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-                        placeholder="1500"
-                        min="0"
-                      />
-                    </div>
-
-                    <div>
-                      <label className="block text-sm font-semibold mb-2">Unit *</label>
-                      <select
-                        value={formData.unit || 'fixed'}
-                        onChange={(e) => setFormData({ ...formData, unit: e.target.value })}
-                        className="w-full px-4 py-2 border-2 border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-                      >
-                        <option value="fixed">Fixed Price</option>
-                        <option value="per_sqft">Per Sq.Ft</option>
-                        <option value="per_meter">Per Meter</option>
-                      </select>
-                      <p className="text-xs text-gray-500 mt-1">
-                        Fixed: One-time price | Per Sq.Ft: Price × Area | Per Meter: Price × Length
-                      </p>
-                    </div>
-
-                    <div>
-                      <label className="block text-sm font-semibold mb-2">Description</label>
-                      <textarea
-                        value={formData.description || ''}
-                        onChange={(e) => setFormData({ ...formData, description: e.target.value })}
-                        className="w-full px-4 py-2 border-2 border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-                        rows="3"
-                      />
-                    </div>
-
-                    <div>
-                      <label className="block text-sm font-semibold mb-2">Display Order</label>
-                      <input
-                        type="number"
-                        value={formData.display_order || 0}
-                        onChange={(e) => setFormData({ ...formData, display_order: parseInt(e.target.value) })}
-                        className="w-full px-4 py-2 border-2 border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-                        min="0"
-                      />
-                    </div>
-
-                    <div className="flex items-center gap-2">
-                      <input
-                        type="checkbox"
-                        checked={formData.is_active !== false}
-                        onChange={(e) => setFormData({ ...formData, is_active: e.target.checked })}
-                        className="w-5 h-5"
-                      />
-                      <label className="text-sm font-semibold">Active</label>
-                    </div>
-                  </div>
-
-                  <div className="p-6 border-t border-gray-200 flex gap-3">
-                    <button
-                      onClick={() => setShowForm(false)}
-                      className="flex-1 px-4 py-3 bg-gray-100 text-gray-700 rounded-lg font-semibold hover:bg-gray-200"
-                    >
-                      Cancel
-                    </button>
-                    <button
-                      onClick={() => saveItem('installation_accessories', formData)}
-                      disabled={saving || !formData.name || !formData.price}
-                      className="flex-1 px-4 py-3 bg-blue-600 text-white rounded-lg font-semibold hover:bg-blue-700 disabled:opacity-50 flex items-center justify-center gap-2"
-                    >
-                      <Save className="w-5 h-5" />
-                      {saving ? 'Saving...' : 'Save Accessory'}
-                    </button>
-                  </div>
-                </div>
-              </div>
-            )}
-
-            {/* Accessories Table */}
-            <div className="bg-white rounded-xl shadow-lg overflow-hidden">
-              <table className="w-full">
-                <thead className="bg-gray-50 border-b">
-                  <tr>
-                    <th className="px-6 py-4 text-left text-xs font-semibold text-gray-600 uppercase">Name</th>
-                    <th className="px-6 py-4 text-left text-xs font-semibold text-gray-600 uppercase">Price</th>
-                    <th className="px-6 py-4 text-left text-xs font-semibold text-gray-600 uppercase">Unit</th>
-                    <th className="px-6 py-4 text-left text-xs font-semibold text-gray-600 uppercase">Status</th>
-                    <th className="px-6 py-4 text-right text-xs font-semibold text-gray-600 uppercase">Actions</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y">
-                  {accessories.length === 0 ? (
-                    <tr>
-                      <td colSpan="5" className="px-6 py-8 text-center text-gray-500">
-                        No accessories found. Click "Add Accessory" to create one.
-                      </td>
-                    </tr>
-                  ) : (
-                    accessories.map((item) => (
-                      <tr key={item.id} className="hover:bg-gray-50">
-                        <td className="px-6 py-4 font-semibold">{item.name}</td>
-                        <td className="px-6 py-4">
-                          <span className="font-bold text-green-600">₹{item.price?.toLocaleString('en-IN')}</span>
-                        </td>
-                        <td className="px-6 py-4">
-                          <span className="px-3 py-1 bg-purple-100 text-purple-800 rounded-full text-sm">
-                            {item.unit === 'fixed' ? 'Fixed' : item.unit.replace('per_', 'Per ')}
-                          </span>
-                        </td>
-                        <td className="px-6 py-4">
-                          <span className={`px-3 py-1 rounded-full text-sm font-semibold ${
-                            item.is_active ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'
-                          }`}>
-                            {item.is_active ? 'Active' : 'Inactive'}
-                          </span>
-                        </td>
-                        <td className="px-6 py-4">
-                          <div className="flex items-center justify-end gap-2">
-                            <button
-                              onClick={() => openEditForm(item)}
-                              className="p-2 hover:bg-blue-100 rounded-lg"
-                            >
-                              <Edit className="w-5 h-5 text-blue-600" />
-                            </button>
-                            <button
-                              onClick={() => deleteItem('installation_accessories', item.id)}
-                              className="p-2 hover:bg-red-100 rounded-lg"
                             >
                               <Trash2 className="w-5 h-5 text-red-600" />
                             </button>
