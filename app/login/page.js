@@ -1,16 +1,19 @@
 'use client';
 import { useState, useEffect } from 'react';
-import { signIn, supabase } from '@/lib/supabase';
+import { supabase } from '@/lib/supabase';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
-import { AlertCircle, Eye, EyeOff } from 'lucide-react';
+import { AlertCircle, Eye, EyeOff, CheckCircle } from 'lucide-react';
 
 export default function LoginPage() {
   const router = useRouter();
+  const [mode, setMode] = useState('login'); // 'login' or 'signup'
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
+  const [fullName, setFullName] = useState('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
+  const [success, setSuccess] = useState('');
   const [showPassword, setShowPassword] = useState(false);
   const [connectionStatus, setConnectionStatus] = useState('checking');
 
@@ -31,9 +34,9 @@ export default function LoginPage() {
       }
 
       // Test connection
-      const { error } = await supabase.from('products').select('id').limit(1);
+      const { error } = await supabase.from('user_profiles').select('id').limit(1);
       
-      if (error) {
+      if (error && !error.message.includes('permission denied')) {
         setConnectionStatus('error');
         setError('Cannot connect to database. Please check your Supabase configuration.');
       } else {
@@ -45,59 +48,116 @@ export default function LoginPage() {
     }
   };
 
+  const handleSignup = async (e) => {
+    e.preventDefault();
+    setLoading(true);
+    setError('');
+    setSuccess('');
+
+    try {
+      // Validate inputs
+      if (!email || !password || !fullName) {
+        throw new Error('Please fill in all fields');
+      }
+
+      if (password.length < 6) {
+        throw new Error('Password must be at least 6 characters');
+      }
+
+      // Sign up user
+      const { data, error: signUpError } = await supabase.auth.signUp({
+        email,
+        password,
+        options: {
+          data: {
+            full_name: fullName,
+          },
+        },
+      });
+
+      if (signUpError) {
+        throw signUpError;
+      }
+
+      if (data.user) {
+        setSuccess('Account created successfully! You can now login.');
+        setMode('login');
+        setPassword('');
+        
+        // Auto-switch to login after 2 seconds
+        setTimeout(() => {
+          setSuccess('');
+        }, 3000);
+      }
+    } catch (err) {
+      setError(err.message || 'Failed to create account. Please try again.');
+    } finally {
+      setLoading(false);
+    }
+  };
+
   const handleLogin = async (e) => {
     e.preventDefault();
     setLoading(true);
     setError('');
+    setSuccess('');
 
     try {
-      // Check if environment variables are set
-      if (!process.env.NEXT_PUBLIC_SUPABASE_URL || !process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY) {
-        throw new Error('Supabase environment variables are not configured. Please add them in Vercel settings.');
+      // Validate inputs
+      if (!email || !password) {
+        throw new Error('Please enter email and password');
       }
 
-      const { data, error: signInError } = await signIn(email, password);
+      // Sign in user
+      const { data, error: signInError } = await supabase.auth.signInWithPassword({
+        email,
+        password,
+      });
 
       if (signInError) {
         if (signInError.message.includes('Invalid login credentials')) {
-          setError('Invalid email or password. Please check your credentials.');
+          throw new Error('Invalid email or password');
         } else if (signInError.message.includes('Email not confirmed')) {
-          setError('Please confirm your email address before logging in.');
+          throw new Error('Please confirm your email address');
         } else {
-          setError(signInError.message);
+          throw signInError;
         }
-        setLoading(false);
-        return;
       }
 
       if (data.user) {
-        // Check if user has admin role
+        // Check user role
         const { data: profile, error: profileError } = await supabase
           .from('user_profiles')
           .select('role')
           .eq('id', data.user.id)
           .single();
 
-        if (profileError || !profile) {
-          setError('User profile not found. Please contact administrator.');
-          setLoading(false);
+        if (profileError) {
+          console.error('Profile error:', profileError);
+          // Profile might not exist yet, redirect to home
+          router.push('/');
           return;
         }
 
-        if (profile.role !== 'admin') {
-          setError('Access denied. Admin privileges required.');
-          await supabase.auth.signOut();
-          setLoading(false);
-          return;
+        // Redirect based on role
+        if (profile.role === 'admin') {
+          router.push('/admin');
+        } else {
+          router.push('/');
         }
-
-        // Success - redirect to admin panel
-        router.push('/admin');
       }
     } catch (err) {
-      setError(err.message || 'An unexpected error occurred. Please try again.');
+      setError(err.message || 'Failed to login. Please try again.');
+    } finally {
       setLoading(false);
     }
+  };
+
+  const switchMode = () => {
+    setMode(mode === 'login' ? 'signup' : 'login');
+    setError('');
+    setSuccess('');
+    setPassword('');
   };
 
   return (
@@ -109,7 +169,9 @@ export default function LoginPage() {
             <span className="text-5xl">🏠</span>
           </div>
           <h1 className="text-4xl font-bold text-gray-900 mb-2">Wall Catalog</h1>
-          <p className="text-gray-600 text-lg">Admin Portal</p>
+          <p className="text-gray-600 text-lg">
+            {mode === 'login' ? 'Welcome Back' : 'Create Account'}
+          </p>
         </div>
 
         {/* Connection Status */}
@@ -132,8 +194,19 @@ export default function LoginPage() {
           </div>
         )}
 
-        {/* Login Form */}
+        {/* Auth Form */}
         <div className="bg-white rounded-2xl shadow-2xl p-8 border-2 border-gray-100">
+          {/* Success Message */}
+          {success && (
+            <div className="mb-6 p-4 bg-green-50 border-2 border-green-200 rounded-xl">
+              <div className="flex items-start gap-3">
+                <CheckCircle className="w-5 h-5 text-green-600 flex-shrink-0 mt-0.5" />
+                <p className="text-sm text-green-800">{success}</p>
+              </div>
+            </div>
+          )}
+
+          {/* Error Message */}
           {error && (
             <div className="mb-6 p-4 bg-red-50 border-2 border-red-200 rounded-xl">
               <div className="flex items-start gap-3">
@@ -143,61 +216,164 @@ export default function LoginPage() {
             </div>
           )}
 
-          <form onSubmit={handleLogin} className="space-y-5">
-            <div>
-              <label className="block text-sm font-semibold mb-2 text-gray-700">Email Address</label>
-              <input
-                type="email"
-                required
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
-                className="w-full px-4 py-3 border-2 border-gray-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all"
-                placeholder="admin@wallcatalog.com"
-                disabled={connectionStatus === 'error'}
-              />
-            </div>
+          {/* Mode Tabs */}
+          <div className="flex gap-2 mb-6 p-1 bg-gray-100 rounded-xl">
+            <button
+              type="button"
+              onClick={() => setMode('login')}
+              className={`flex-1 py-2.5 rounded-lg font-semibold text-sm transition-all ${
+                mode === 'login'
+                  ? 'bg-white text-blue-600 shadow-md'
+                  : 'text-gray-600 hover:text-gray-900'
+              }`}
+            >
+              Login
+            </button>
+            <button
+              type="button"
+              onClick={() => setMode('signup')}
+              className={`flex-1 py-2.5 rounded-lg font-semibold text-sm transition-all ${
+                mode === 'signup'
+                  ? 'bg-white text-blue-600 shadow-md'
+                  : 'text-gray-600 hover:text-gray-900'
+              }`}
+            >
+              Sign Up
+            </button>
+          </div>
 
-            <div>
-              <label className="block text-sm font-semibold mb-2 text-gray-700">Password</label>
-              <div className="relative">
+          {/* Signup Form */}
+          {mode === 'signup' && (
+            <form onSubmit={handleSignup} className="space-y-5">
+              <div>
+                <label className="block text-sm font-semibold mb-2 text-gray-700">Full Name</label>
                 <input
-                  type={showPassword ? 'text' : 'password'}
+                  type="text"
                   required
-                  value={password}
-                  onChange={(e) => setPassword(e.target.value)}
-                  className="w-full px-4 py-3 border-2 border-gray-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all pr-12"
-                  placeholder="••••••••"
+                  value={fullName}
+                  onChange={(e) => setFullName(e.target.value)}
+                  className="w-full px-4 py-3 border-2 border-gray-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all"
+                  placeholder="John Doe"
                   disabled={connectionStatus === 'error'}
                 />
-                <button
-                  type="button"
-                  onClick={() => setShowPassword(!showPassword)}
-                  className="absolute right-3 top-1/2 -translate-y-1/2 p-2 hover:bg-gray-100 rounded-lg transition-all"
-                >
-                  {showPassword ? (
-                    <EyeOff className="w-5 h-5 text-gray-500" />
-                  ) : (
-                    <Eye className="w-5 h-5 text-gray-500" />
-                  )}
-                </button>
               </div>
-            </div>
 
-            <button
-              type="submit"
-              disabled={loading || connectionStatus === 'error'}
-              className="w-full py-4 bg-gradient-to-r from-blue-600 to-blue-700 text-white rounded-xl font-bold text-lg hover:from-blue-700 hover:to-blue-800 disabled:opacity-50 disabled:cursor-not-allowed transition-all shadow-lg hover:shadow-xl"
-            >
-              {loading ? (
-                <span className="flex items-center justify-center gap-2">
-                  <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-white"></div>
-                  Signing in...
-                </span>
-              ) : (
-                'Sign In'
-              )}
-            </button>
-          </form>
+              <div>
+                <label className="block text-sm font-semibold mb-2 text-gray-700">Email Address</label>
+                <input
+                  type="email"
+                  required
+                  value={email}
+                  onChange={(e) => setEmail(e.target.value)}
+                  className="w-full px-4 py-3 border-2 border-gray-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all"
+                  placeholder="you@example.com"
+                  disabled={connectionStatus === 'error'}
+                />
+              </div>
+
+              <div>
+                <label className="block text-sm font-semibold mb-2 text-gray-700">Password</label>
+                <div className="relative">
+                  <input
+                    type={showPassword ? 'text' : 'password'}
+                    required
+                    value={password}
+                    onChange={(e) => setPassword(e.target.value)}
+                    className="w-full px-4 py-3 border-2 border-gray-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all pr-12"
+                    placeholder="••••••••"
+                    disabled={connectionStatus === 'error'}
+                    minLength={6}
+                  />
+                  <button
+                    type="button"
+                    onClick={() => setShowPassword(!showPassword)}
+                    className="absolute right-3 top-1/2 -translate-y-1/2 p-2 hover:bg-gray-100 rounded-lg transition-all"
+                  >
+                    {showPassword ? (
+                      <EyeOff className="w-5 h-5 text-gray-500" />
+                    ) : (
+                      <Eye className="w-5 h-5 text-gray-500" />
+                    )}
+                  </button>
+                </div>
+                <p className="text-xs text-gray-500 mt-1">Minimum 6 characters</p>
+              </div>
+
+              <button
+                type="submit"
+                disabled={loading || connectionStatus === 'error'}
+                className="w-full py-4 bg-gradient-to-r from-blue-600 to-blue-700 text-white rounded-xl font-bold text-lg hover:from-blue-700 hover:to-blue-800 disabled:opacity-50 disabled:cursor-not-allowed transition-all shadow-lg hover:shadow-xl"
+              >
+                {loading ? (
+                  <span className="flex items-center justify-center gap-2">
+                    <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-white"></div>
+                    Creating account...
+                  </span>
+                ) : (
+                  'Create Account'
+                )}
+              </button>
+            </form>
+          )}
+
+          {/* Login Form */}
+          {mode === 'login' && (
+            <form onSubmit={handleLogin} className="space-y-5">
+              <div>
+                <label className="block text-sm font-semibold mb-2 text-gray-700">Email Address</label>
+                <input
+                  type="email"
+                  required
+                  value={email}
+                  onChange={(e) => setEmail(e.target.value)}
+                  className="w-full px-4 py-3 border-2 border-gray-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all"
+                  placeholder="you@example.com"
+                  disabled={connectionStatus === 'error'}
+                />
+              </div>
+
+              <div>
+                <label className="block text-sm font-semibold mb-2 text-gray-700">Password</label>
+                <div className="relative">
+                  <input
+                    type={showPassword ? 'text' : 'password'}
+                    required
+                    value={password}
+                    onChange={(e) => setPassword(e.target.value)}
+                    className="w-full px-4 py-3 border-2 border-gray-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all pr-12"
+                    placeholder="••••••••"
+                    disabled={connectionStatus === 'error'}
+                  />
+                  <button
+                    type="button"
+                    onClick={() => setShowPassword(!showPassword)}
+                    className="absolute right-3 top-1/2 -translate-y-1/2 p-2 hover:bg-gray-100 rounded-lg transition-all"
+                  >
+                    {showPassword ? (
+                      <EyeOff className="w-5 h-5 text-gray-500" />
+                    ) : (
+                      <Eye className="w-5 h-5 text-gray-500" />
+                    )}
+                  </button>
+                </div>
+              </div>
+
+              <button
+                type="submit"
+                disabled={loading || connectionStatus === 'error'}
+                className="w-full py-4 bg-gradient-to-r from-blue-600 to-blue-700 text-white rounded-xl font-bold text-lg hover:from-blue-700 hover:to-blue-800 disabled:opacity-50 disabled:cursor-not-allowed transition-all shadow-lg hover:shadow-xl"
+              >
+                {loading ? (
+                  <span className="flex items-center justify-center gap-2">
+                    <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-white"></div>
+                    Signing in...
+                  </span>
+                ) : (
+                  'Sign In'
+                )}
+              </button>
+            </form>
+          )}
 
           <div className="mt-6 text-center">
             <Link href="/" className="text-sm text-blue-600 hover:text-blue-700 font-semibold hover:underline">
@@ -208,26 +384,33 @@ export default function LoginPage() {
 
         {/* Help Section */}
         <div className="mt-6 p-6 bg-white rounded-2xl shadow-lg border-2 border-gray-100">
-          <h3 className="font-bold text-sm text-gray-900 mb-3">Need Help?</h3>
+          <h3 className="font-bold text-sm text-gray-900 mb-3">📋 Getting Started</h3>
           
           <div className="space-y-3 text-xs text-gray-600">
             <div className="p-3 bg-blue-50 rounded-lg">
-              <p className="font-semibold text-blue-900 mb-1">Default Credentials:</p>
-              <p className="font-mono text-blue-800">Email: admin@wallcatalog.com</p>
-              <p className="font-mono text-blue-800">Password: Admin@123</p>
+              <p className="font-semibold text-blue-900 mb-2">For Regular Users:</p>
+              <ol className="list-decimal list-inside space-y-1 text-blue-800">
+                <li>Click "Sign Up" tab above</li>
+                <li>Enter your details</li>
+                <li>Create account</li>
+                <li>Login and browse catalog</li>
+              </ol>
             </div>
 
-            <div className="p-3 bg-yellow-50 rounded-lg">
-              <p className="font-semibold text-yellow-900 mb-1">⚠️ First Time Setup:</p>
-              <p className="text-yellow-800">1. Create user in Supabase Auth</p>
-              <p className="text-yellow-800">2. Add admin role in user_profiles table</p>
-              <p className="text-yellow-800">3. Set environment variables in Vercel</p>
+            <div className="p-3 bg-purple-50 rounded-lg">
+              <p className="font-semibold text-purple-900 mb-2">For Admin Access:</p>
+              <ol className="list-decimal list-inside space-y-1 text-purple-800">
+                <li>Create account first (above)</li>
+                <li>Go to Supabase SQL Editor</li>
+                <li>Run: <code className="bg-purple-100 px-1 rounded">UPDATE user_profiles SET role = 'admin' WHERE email = 'your-email'</code></li>
+                <li>Logout and login again</li>
+                <li>Access admin panel at /admin</li>
+              </ol>
             </div>
 
             <div className="p-3 bg-gray-50 rounded-lg">
-              <p className="font-semibold text-gray-900 mb-1">Environment Variables Required:</p>
-              <p className="font-mono text-xs text-gray-700">NEXT_PUBLIC_SUPABASE_URL</p>
-              <p className="font-mono text-xs text-gray-700">NEXT_PUBLIC_SUPABASE_ANON_KEY</p>
+              <p className="font-semibold text-gray-900 mb-1">Need Help?</p>
+              <p className="text-gray-700">Check ADMIN_PANEL_SETUP.md for detailed instructions</p>
             </div>
           </div>
         </div>
