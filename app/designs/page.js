@@ -2,7 +2,7 @@
 import { useState, useEffect } from 'react';
 import { supabase } from '@/lib/supabase';
 import Link from 'next/link';
-import { ArrowLeft, Eye, ChevronLeft, ChevronRight } from 'lucide-react';
+import { ArrowLeft, Eye, ChevronLeft, ChevronRight, Filter } from 'lucide-react';
 
 const ROOM_AREAS = [
   { id: 'tv-unit', name: 'TV Unit', icon: '📺', color: 'from-blue-500 to-blue-600' },
@@ -13,17 +13,42 @@ const ROOM_AREAS = [
   { id: 'mandir', name: 'Mandir', icon: '🕉️', color: 'from-rose-500 to-pink-600' },
 ];
 
+const MATERIAL_TYPES = [
+  { id: 'all', name: 'All looks' },
+  { id: 'Wood', name: 'Wood' },
+  { id: 'Marble', name: 'Marble' },
+  { id: 'Rattan', name: 'Rattan' },
+  { id: 'Fabric', name: 'Fabric' },
+  { id: 'Leather', name: 'Leather' },
+];
+
+const STYLE_FILTERS = [
+  { id: 'all', name: 'All Styles' },
+  { id: 'Economy', name: 'Economy' },
+  { id: 'Luxe', name: 'Luxe' },
+  { id: 'Minimal', name: 'Minimal' },
+  { id: 'Statement', name: 'Statement' },
+];
+
 export default function DesignsPage() {
   const [selectedRoom, setSelectedRoom] = useState(null);
   const [designs, setDesigns] = useState([]);
+  const [filteredDesigns, setFilteredDesigns] = useState([]);
   const [loading, setLoading] = useState(false);
   const [imageIndexes, setImageIndexes] = useState({});
+  const [selectedMaterial, setSelectedMaterial] = useState('all');
+  const [selectedStyle, setSelectedStyle] = useState('all');
+  const [showFilterModal, setShowFilterModal] = useState(false);
 
   useEffect(() => {
     if (selectedRoom) {
       loadDesigns();
     }
   }, [selectedRoom]);
+
+  useEffect(() => {
+    applyFilters();
+  }, [designs, selectedMaterial, selectedStyle]);
 
   const loadDesigns = async () => {
     setLoading(true);
@@ -50,6 +75,26 @@ export default function DesignsPage() {
     } finally {
       setLoading(false);
     }
+  };
+
+  const applyFilters = () => {
+    let filtered = [...designs];
+
+    // Material filter
+    if (selectedMaterial !== 'all') {
+      filtered = filtered.filter(design => 
+        design.material_type === selectedMaterial
+      );
+    }
+
+    // Style filter
+    if (selectedStyle !== 'all') {
+      filtered = filtered.filter(design => 
+        design.style_category === selectedStyle
+      );
+    }
+
+    setFilteredDesigns(filtered);
   };
 
   const nextImage = (designId, e) => {
@@ -137,31 +182,162 @@ export default function DesignsPage() {
     );
   }
 
-  // Step 2: Design Grid
+  // Step 2: Design Grid with Filters
   return (
     <div className="min-h-screen bg-gradient-to-br from-blue-50 via-white to-purple-50">
       {/* Header */}
       <header className="bg-white shadow-md sticky top-0 z-50">
         <div className="max-w-7xl mx-auto px-4 py-4">
-          <div className="flex items-center gap-4">
-            <button
-              onClick={() => setSelectedRoom(null)}
-              className="p-2 hover:bg-gray-100 rounded-lg transition-all"
-            >
-              <ArrowLeft className="w-6 h-6 text-gray-700" />
-            </button>
-            <div className="flex items-center gap-3">
-              <div className={`w-10 h-10 bg-gradient-to-br ${selectedRoom.color} rounded-xl flex items-center justify-center text-2xl`}>
-                {selectedRoom.icon}
-              </div>
-              <div>
-                <h1 className="text-xl font-bold text-gray-900">{selectedRoom.name} Designs</h1>
-                <p className="text-xs text-gray-600">{designs.length} premium designs</p>
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-4">
+              <button
+                onClick={() => setSelectedRoom(null)}
+                className="p-2 hover:bg-gray-100 rounded-lg transition-all"
+              >
+                <ArrowLeft className="w-6 h-6 text-gray-700" />
+              </button>
+              <div className="flex items-center gap-3">
+                <div className={`w-10 h-10 bg-gradient-to-br ${selectedRoom.color} rounded-xl flex items-center justify-center text-2xl`}>
+                  {selectedRoom.icon}
+                </div>
+                <div>
+                  <h1 className="text-xl font-bold text-gray-900">Find your wall design</h1>
+                  <p className="text-xs text-gray-600">{filteredDesigns.length} designs available</p>
+                </div>
               </div>
             </div>
           </div>
         </div>
       </header>
+
+      {/* Material Type Tabs */}
+      <div className="bg-white border-b border-gray-200 sticky top-[72px] z-40">
+        <div className="max-w-7xl mx-auto px-4">
+          <div className="flex overflow-x-auto scrollbar-hide">
+            {MATERIAL_TYPES.map((material) => (
+              <button
+                key={material.id}
+                onClick={() => setSelectedMaterial(material.id)}
+                className={`px-6 py-4 font-semibold whitespace-nowrap transition-all ${
+                  selectedMaterial === material.id
+                    ? 'border-b-2 border-black text-black'
+                    : 'text-gray-600 hover:text-gray-900'
+                }`}
+              >
+                {material.name}
+              </button>
+            ))}
+          </div>
+        </div>
+      </div>
+
+      {/* Style Filters */}
+      <div className="bg-white border-b border-gray-200 sticky top-[128px] z-40">
+        <div className="max-w-7xl mx-auto px-4 py-4">
+          <div className="flex items-center gap-3 overflow-x-auto scrollbar-hide">
+            {/* Filter Button */}
+            <button
+              onClick={() => setShowFilterModal(!showFilterModal)}
+              className="flex items-center gap-2 px-6 py-3 border-2 border-gray-300 rounded-full font-semibold text-gray-700 hover:border-gray-400 transition-all whitespace-nowrap"
+            >
+              <Filter className="w-5 h-5" />
+              Filter
+            </button>
+
+            {/* Style Pills */}
+            {STYLE_FILTERS.map((style) => (
+              <button
+                key={style.id}
+                onClick={() => setSelectedStyle(style.id)}
+                className={`px-6 py-3 rounded-full font-semibold whitespace-nowrap transition-all ${
+                  selectedStyle === style.id
+                    ? 'bg-black text-white'
+                    : 'bg-white border-2 border-gray-300 text-gray-700 hover:border-gray-400'
+                }`}
+              >
+                {style.name}
+              </button>
+            ))}
+          </div>
+        </div>
+      </div>
+
+      {/* Filter Modal */}
+      {showFilterModal && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 z-50 flex items-center justify-center p-4">
+          <div className="bg-white rounded-2xl shadow-2xl max-w-md w-full max-h-[80vh] overflow-y-auto">
+            <div className="p-6 border-b border-gray-200 flex justify-between items-center sticky top-0 bg-white">
+              <h3 className="text-xl font-bold">Filters</h3>
+              <button
+                onClick={() => setShowFilterModal(false)}
+                className="p-2 hover:bg-gray-100 rounded-lg"
+              >
+                ✕
+              </button>
+            </div>
+
+            <div className="p-6 space-y-6">
+              {/* Material Type */}
+              <div>
+                <h4 className="font-bold text-gray-900 mb-3">Material Type</h4>
+                <div className="space-y-2">
+                  {MATERIAL_TYPES.map((material) => (
+                    <button
+                      key={material.id}
+                      onClick={() => setSelectedMaterial(material.id)}
+                      className={`w-full text-left px-4 py-3 rounded-lg font-semibold transition-all ${
+                        selectedMaterial === material.id
+                          ? 'bg-blue-600 text-white'
+                          : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+                      }`}
+                    >
+                      {material.name}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              {/* Style Category */}
+              <div>
+                <h4 className="font-bold text-gray-900 mb-3">Style</h4>
+                <div className="space-y-2">
+                  {STYLE_FILTERS.map((style) => (
+                    <button
+                      key={style.id}
+                      onClick={() => setSelectedStyle(style.id)}
+                      className={`w-full text-left px-4 py-3 rounded-lg font-semibold transition-all ${
+                        selectedStyle === style.id
+                          ? 'bg-blue-600 text-white'
+                          : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+                      }`}
+                    >
+                      {style.name}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            </div>
+
+            <div className="p-6 border-t border-gray-200 flex gap-3">
+              <button
+                onClick={() => {
+                  setSelectedMaterial('all');
+                  setSelectedStyle('all');
+                }}
+                className="flex-1 px-4 py-3 bg-gray-100 text-gray-700 rounded-lg font-semibold hover:bg-gray-200"
+              >
+                Clear All
+              </button>
+              <button
+                onClick={() => setShowFilterModal(false)}
+                className="flex-1 px-4 py-3 bg-blue-600 text-white rounded-lg font-semibold hover:bg-blue-700"
+              >
+                Apply Filters
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Designs Grid */}
       <div className="max-w-7xl mx-auto px-4 py-8">
@@ -172,9 +348,9 @@ export default function DesignsPage() {
               <p className="text-gray-600">Loading designs...</p>
             </div>
           </div>
-        ) : designs.length > 0 ? (
+        ) : filteredDesigns.length > 0 ? (
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
-            {designs.map((design) => {
+            {filteredDesigns.map((design) => {
               const images = getDesignImages(design);
               const currentIndex = imageIndexes[design.id] || 0;
               const hasMultipleImages = images.length > 1;
@@ -249,11 +425,11 @@ export default function DesignsPage() {
                     <div className="flex items-center gap-4 text-sm">
                       <div className="flex items-center gap-2">
                         <span className="w-3 h-3 bg-blue-500 rounded-full"></span>
-                        <span className="text-gray-700 font-medium">{design.finish_type || 'Premium'}</span>
+                        <span className="text-gray-700 font-medium">{design.material_type || 'Premium'}</span>
                       </div>
                       <div className="text-gray-500">•</div>
-                      <div className="text-gray-700 font-semibold">
-                        Starting ₹{(design.price_per_sqft * 100).toLocaleString('en-IN')}
+                      <div className="text-gray-700 font-medium">
+                        {design.style_category || 'Modern'}
                       </div>
                     </div>
 
@@ -272,18 +448,21 @@ export default function DesignsPage() {
           </div>
         ) : (
           <div className="text-center py-16">
-            <div className="text-6xl mb-4">🎨</div>
+            <div className="text-6xl mb-4">🔍</div>
             <h3 className="text-2xl font-bold text-gray-900 mb-2">
-              No designs available yet
+              No designs match your filters
             </h3>
             <p className="text-gray-600 mb-6">
-              We're adding new designs for {selectedRoom.name} soon. Check back later!
+              Try adjusting your filters to see more designs
             </p>
             <button
-              onClick={() => setSelectedRoom(null)}
+              onClick={() => {
+                setSelectedMaterial('all');
+                setSelectedStyle('all');
+              }}
               className="px-6 py-3 bg-blue-600 text-white rounded-xl font-semibold hover:bg-blue-700 transition-all"
             >
-              Choose Another Room
+              Clear Filters
             </button>
           </div>
         )}
