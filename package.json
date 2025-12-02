@@ -16,6 +16,7 @@
     "@supabase/auth-helpers-nextjs": "^0.8.7",
     "jspdf": "^2.5.1",
     "jspdf-autotable": "^3.8.2",
+    "html2canvas": "^1.4.1",
     "lucide-react": "^0.294.0"
   },
   "devDependencies": {
