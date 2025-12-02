@@ -3,7 +3,7 @@ import { useState, useEffect } from 'react';
 import { useSearchParams, useRouter } from 'next/navigation';
 import { supabase } from '@/lib/supabase';
 import Link from 'next/link';
-import { ArrowLeft, ZoomIn, Save, FileText, Plus, Minus } from 'lucide-react';
+import { ArrowLeft, ZoomIn, Save, FileText, Plus, Minus, ChevronLeft, ChevronRight } from 'lucide-react';
 
 const MATERIALS = [
   { id: 'walnut', name: 'Walnut Wood', type: 'Wood', priceAdjustment: 2000, color: '#5D4037' },
@@ -34,6 +34,7 @@ export default function DesignDetailPage() {
   const [selectedAddons, setSelectedAddons] = useState([]);
   const [area, setArea] = useState(100);
   const [imageZoom, setImageZoom] = useState(false);
+  const [currentImageIndex, setCurrentImageIndex] = useState(0);
 
   useEffect(() => {
     if (designId) {
@@ -43,11 +44,23 @@ export default function DesignDetailPage() {
 
   const loadDesign = async () => {
     try {
-      const { data, error } = await supabase
-        .from('products')
+      // Try designs table first
+      let { data, error } = await supabase
+        .from('designs')
         .select('*')
         .eq('id', designId)
         .single();
+
+      // Fallback to products table
+      if (error || !data) {
+        const result = await supabase
+          .from('products')
+          .select('*')
+          .eq('id', designId)
+          .single();
+        data = result.data;
+        error = result.error;
+      }
 
       if (error) throw error;
       setDesign(data);
@@ -56,6 +69,24 @@ export default function DesignDetailPage() {
     } finally {
       setLoading(false);
     }
+  };
+
+  const getImages = () => {
+    if (!design) return [];
+    const images = [];
+    if (design.image_url) images.push(design.image_url);
+    if (design.image_url_2) images.push(design.image_url_2);
+    return images.length > 0 ? images : ['https://via.placeholder.com/800x600?text=Design+Preview'];
+  };
+
+  const images = getImages();
+
+  const nextImage = () => {
+    setCurrentImageIndex((prev) => (prev + 1) % images.length);
+  };
+
+  const prevImage = () => {
+    setCurrentImageIndex((prev) => (prev - 1 + images.length) % images.length);
   };
 
   const toggleAddon = (addon) => {
@@ -69,7 +100,8 @@ export default function DesignDetailPage() {
   const calculateCost = () => {
     if (!design) return { base: 0, material: 0, addons: 0, labor: 0, total: 0 };
 
-    const baseCost = design.price_per_sqft * area;
+    const pricePerSqft = design.price_per_sqft || 500;
+    const baseCost = pricePerSqft * area;
     const materialCost = selectedMaterial.priceAdjustment;
     const addonsCost = selectedAddons.reduce((sum, addon) => sum + addon.price, 0);
     const laborCost = INSTALLATION_LABOR;
@@ -90,7 +122,7 @@ export default function DesignDetailPage() {
     const designData = {
       id: design.id,
       name: design.name,
-      image: design.image_url,
+      image: images[0],
       material: selectedMaterial,
       addons: selectedAddons,
       area: area,
@@ -130,8 +162,8 @@ export default function DesignDetailPage() {
       <div className="min-h-screen bg-gray-50 flex items-center justify-center">
         <div className="text-center">
           <h2 className="text-2xl font-bold text-gray-900 mb-4">Design not found</h2>
-          <Link href="/designs" className="text-blue-600 hover:text-blue-700 font-semibold">
-            Back to Designs
+          <Link href="/browse" className="text-blue-600 hover:text-blue-700 font-semibold">
+            Back to Browse
           </Link>
         </div>
       </div>
@@ -146,7 +178,7 @@ export default function DesignDetailPage() {
       <header className="bg-white shadow-md sticky top-0 z-50">
         <div className="max-w-7xl mx-auto px-4 py-4">
           <div className="flex items-center gap-4">
-            <Link href="/designs" className="p-2 hover:bg-gray-100 rounded-lg transition-all">
+            <Link href="/browse" className="p-2 hover:bg-gray-100 rounded-lg transition-all">
               <ArrowLeft className="w-6 h-6 text-gray-700" />
             </Link>
             <div>
@@ -161,23 +193,80 @@ export default function DesignDetailPage() {
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
           {/* Left Column */}
           <div className="lg:col-span-2 space-y-6">
-            {/* Image */}
+            {/* Image Carousel */}
             <div className="bg-white rounded-2xl shadow-lg overflow-hidden">
-              <div className="relative h-96 bg-gray-100 group cursor-pointer" onClick={() => setImageZoom(true)}>
+              <div className="relative h-96 bg-gray-100 group">
                 <img
-                  src={design.image_url || 'https://via.placeholder.com/800x600?text=Design+Preview'}
-                  alt={design.name}
+                  src={images[currentImageIndex]}
+                  alt={`${design.name} - Image ${currentImageIndex + 1}`}
                   className="w-full h-full object-cover"
                   onError={(e) => {
                     e.target.src = 'https://via.placeholder.com/800x600?text=Design+Preview';
                   }}
                 />
-                <div className="absolute inset-0 bg-black bg-opacity-0 group-hover:bg-opacity-20 transition-all flex items-center justify-center">
+                
+                {/* Image Counter */}
+                {images.length > 1 && (
+                  <div className="absolute top-4 right-4 bg-black bg-opacity-60 text-white px-3 py-1 rounded-full text-sm font-semibold">
+                    {currentImageIndex + 1} / {images.length}
+                  </div>
+                )}
+
+                {/* Navigation Arrows */}
+                {images.length > 1 && (
+                  <>
+                    <button
+                      onClick={prevImage}
+                      className="absolute left-4 top-1/2 -translate-y-1/2 bg-white bg-opacity-90 hover:bg-opacity-100 p-3 rounded-full shadow-lg transition-all"
+                    >
+                      <ChevronLeft className="w-6 h-6 text-gray-900" />
+                    </button>
+                    <button
+                      onClick={nextImage}
+                      className="absolute right-4 top-1/2 -translate-y-1/2 bg-white bg-opacity-90 hover:bg-opacity-100 p-3 rounded-full shadow-lg transition-all"
+                    >
+                      <ChevronRight className="w-6 h-6 text-gray-900" />
+                    </button>
+                  </>
+                )}
+
+                {/* Zoom Overlay */}
+                <div 
+                  className="absolute inset-0 bg-black bg-opacity-0 group-hover:bg-opacity-20 transition-all flex items-center justify-center cursor-pointer"
+                  onClick={() => setImageZoom(true)}
+                >
                   <div className="opacity-0 group-hover:opacity-100 transition-all bg-white rounded-full p-4">
                     <ZoomIn className="w-8 h-8 text-gray-900" />
                   </div>
                 </div>
               </div>
+
+              {/* Thumbnail Navigation */}
+              {images.length > 1 && (
+                <div className="p-4 flex gap-2 justify-center bg-gray-50">
+                  {images.map((img, idx) => (
+                    <button
+                      key={idx}
+                      onClick={() => setCurrentImageIndex(idx)}
+                      className={`w-20 h-20 rounded-lg overflow-hidden border-2 transition-all ${
+                        currentImageIndex === idx
+                          ? 'border-blue-600 shadow-lg'
+                          : 'border-gray-300 hover:border-blue-400'
+                      }`}
+                    >
+                      <img
+                        src={img}
+                        alt={`Thumbnail ${idx + 1}`}
+                        className="w-full h-full object-cover"
+                        onError={(e) => {
+                          e.target.src = 'https://via.placeholder.com/100x100?text=' + (idx + 1);
+                        }}
+                      />
+                    </button>
+                  ))}
+                </div>
+              )}
+
               <div className="p-6">
                 <h2 className="text-2xl font-bold text-gray-900 mb-2">{design.name}</h2>
                 <p className="text-gray-600">{design.description || 'Premium wall panel design'}</p>
@@ -250,7 +339,7 @@ export default function DesignDetailPage() {
               <div className="flex items-center gap-4">
                 <button
                   onClick={() => setArea(Math.max(10, area - 10))}
-                  className="w-12 h-12 bg-gray-200 hover:bg-gray-300 rounded-xl flex items-center justify-center transition-all"
+                  className="p-3 bg-gray-100 hover:bg-gray-200 rounded-xl transition-all"
                 >
                   <Minus className="w-6 h-6 text-gray-700" />
                 </button>
@@ -258,11 +347,12 @@ export default function DesignDetailPage() {
                   type="number"
                   value={area}
                   onChange={(e) => setArea(Math.max(10, parseInt(e.target.value) || 10))}
-                  className="flex-1 text-center text-3xl font-bold text-gray-900 border-2 border-gray-300 rounded-xl py-4 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  className="flex-1 text-center text-2xl font-bold py-3 border-2 border-gray-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  min="10"
                 />
                 <button
                   onClick={() => setArea(area + 10)}
-                  className="w-12 h-12 bg-gray-200 hover:bg-gray-300 rounded-xl flex items-center justify-center transition-all"
+                  className="p-3 bg-gray-100 hover:bg-gray-200 rounded-xl transition-all"
                 >
                   <Plus className="w-6 h-6 text-gray-700" />
                 </button>
@@ -270,77 +360,57 @@ export default function DesignDetailPage() {
             </div>
           </div>
 
-          {/* Right Column - Calculator */}
+          {/* Right Column - Cost Summary */}
           <div className="lg:col-span-1">
-            <div className="bg-white rounded-2xl shadow-xl p-6 sticky top-24 border-2 border-blue-100">
-              <h3 className="text-2xl font-bold text-gray-900 mb-6">Cost Breakdown</h3>
-
+            <div className="bg-white rounded-2xl shadow-lg p-6 sticky top-24">
+              <h3 className="text-xl font-bold text-gray-900 mb-6">Cost Summary</h3>
+              
               <div className="space-y-4 mb-6">
                 <div className="flex justify-between items-center pb-3 border-b border-gray-200">
-                  <span className="text-gray-700">Base Panel Cost</span>
-                  <span className="font-semibold text-gray-900">
-                    ₹{cost.base.toLocaleString('en-IN')}
-                  </span>
+                  <span className="text-gray-600">Base Cost</span>
+                  <span className="font-semibold text-gray-900">₹{cost.base.toLocaleString('en-IN')}</span>
                 </div>
-
+                
                 <div className="flex justify-between items-center pb-3 border-b border-gray-200">
-                  <span className="text-gray-700">Material ({selectedMaterial.name})</span>
+                  <span className="text-gray-600">Material</span>
                   <span className={`font-semibold ${cost.material >= 0 ? 'text-green-600' : 'text-red-600'}`}>
                     {cost.material >= 0 ? '+' : ''}₹{cost.material.toLocaleString('en-IN')}
                   </span>
                 </div>
-
-                {selectedAddons.length > 0 && (
-                  <div className="pb-3 border-b border-gray-200">
-                    <p className="text-gray-700 mb-2">Add-ons:</p>
-                    {selectedAddons.map((addon) => (
-                      <div key={addon.id} className="flex justify-between items-center ml-4 mb-1">
-                        <span className="text-sm text-gray-600">{addon.name}</span>
-                        <span className="text-sm font-semibold text-green-600">
-                          +₹{addon.price.toLocaleString('en-IN')}
-                        </span>
-                      </div>
-                    ))}
+                
+                {cost.addons > 0 && (
+                  <div className="flex justify-between items-center pb-3 border-b border-gray-200">
+                    <span className="text-gray-600">Add-ons</span>
+                    <span className="font-semibold text-green-600">+₹{cost.addons.toLocaleString('en-IN')}</span>
                   </div>
                 )}
-
+                
                 <div className="flex justify-between items-center pb-3 border-b border-gray-200">
-                  <span className="text-gray-700">Installation Labor</span>
-                  <span className="font-semibold text-gray-900">
-                    ₹{cost.labor.toLocaleString('en-IN')}
-                  </span>
+                  <span className="text-gray-600">Installation</span>
+                  <span className="font-semibold text-gray-900">₹{cost.labor.toLocaleString('en-IN')}</span>
                 </div>
-              </div>
-
-              <div className="bg-gradient-to-r from-blue-50 to-purple-50 rounded-xl p-4 mb-4">
-                <div className="flex justify-between items-center mb-2">
-                  <span className="text-lg font-bold text-gray-900">TOTAL</span>
-                  <span className="text-3xl font-bold text-blue-600">
-                    ₹{cost.total.toLocaleString('en-IN')}
-                  </span>
-                </div>
-                <div className="text-right">
-                  <span className="text-sm text-gray-600">Rounded: </span>
-                  <span className="text-sm font-semibold text-gray-900">
-                    ₹{cost.rounded.toLocaleString('en-IN')}
-                  </span>
+                
+                <div className="flex justify-between items-center pt-3">
+                  <span className="text-lg font-bold text-gray-900">Total</span>
+                  <span className="text-2xl font-bold text-blue-600">₹{cost.rounded.toLocaleString('en-IN')}</span>
                 </div>
               </div>
 
               <div className="space-y-3">
                 <button
+                  onClick={handleCreateQuote}
+                  className="w-full py-4 bg-gradient-to-r from-blue-600 to-blue-700 text-white rounded-xl font-bold hover:from-blue-700 hover:to-blue-800 transition-all shadow-lg flex items-center justify-center gap-2"
+                >
+                  <FileText className="w-5 h-5" />
+                  Get Quote
+                </button>
+                
+                <button
                   onClick={handleSaveDesign}
-                  className="w-full flex items-center justify-center gap-2 py-4 bg-gray-200 hover:bg-gray-300 text-gray-900 rounded-xl font-semibold transition-all"
+                  className="w-full py-4 bg-gray-100 text-gray-900 rounded-xl font-semibold hover:bg-gray-200 transition-all flex items-center justify-center gap-2"
                 >
                   <Save className="w-5 h-5" />
                   Save Design
-                </button>
-                <button
-                  onClick={handleCreateQuote}
-                  className="w-full flex items-center justify-center gap-2 py-4 bg-gradient-to-r from-blue-600 to-blue-700 hover:from-blue-700 hover:to-blue-800 text-white rounded-xl font-semibold transition-all shadow-lg hover:shadow-xl"
-                >
-                  <FileText className="w-5 h-5" />
-                  Create Quote
                 </button>
               </div>
             </div>
@@ -348,17 +418,23 @@ export default function DesignDetailPage() {
         </div>
       </div>
 
-      {/* Zoom Modal */}
+      {/* Image Zoom Modal */}
       {imageZoom && (
         <div
           className="fixed inset-0 bg-black bg-opacity-90 z-50 flex items-center justify-center p-4"
           onClick={() => setImageZoom(false)}
         >
           <img
-            src={design.image_url || 'https://via.placeholder.com/1200x900?text=Design+Preview'}
+            src={images[currentImageIndex]}
             alt={design.name}
             className="max-w-full max-h-full object-contain"
           />
+          <button
+            onClick={() => setImageZoom(false)}
+            className="absolute top-4 right-4 bg-white rounded-full p-3 hover:bg-gray-100 transition-all"
+          >
+            <span className="text-2xl">×</span>
+          </button>
         </div>
       )}
     </div>
