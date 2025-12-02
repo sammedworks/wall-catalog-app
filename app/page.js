@@ -1,8 +1,25 @@
 'use client';
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect } from 'react';
 import { supabase } from '@/lib/supabase';
 import Link from 'next/link';
-import { ChevronLeft, ChevronRight } from 'lucide-react';
+import { Filter, Heart } from 'lucide-react';
+
+const MATERIAL_TYPES = [
+  { id: 'all', name: 'All looks' },
+  { id: 'Wood', name: 'Wood' },
+  { id: 'Marble', name: 'Marble' },
+  { id: 'Rattan', name: 'Rattan' },
+  { id: 'Fabric', name: 'Fabric' },
+  { id: 'Leather', name: 'Leather' },
+];
+
+const STYLE_FILTERS = [
+  { id: 'all', name: 'All Styles' },
+  { id: 'Economy', name: 'Economy' },
+  { id: 'Luxe', name: 'Luxe' },
+  { id: 'Minimal', name: 'Minimal' },
+  { id: 'Statement', name: 'Statement' },
+];
 
 const SPACE_CATEGORIES = [
   { 
@@ -35,107 +52,268 @@ const SPACE_CATEGORIES = [
     name: 'Mandir', 
     image: 'https://images.unsplash.com/photo-1604709177225-055f99402ea3?w=400&h=300&fit=crop',
   },
+  { 
+    id: 'kitchen', 
+    name: 'Kitchen', 
+    image: 'https://images.unsplash.com/photo-1556911220-bff31c812dba?w=400&h=300&fit=crop',
+  },
+  { 
+    id: 'bathroom', 
+    name: 'Bathroom', 
+    image: 'https://images.unsplash.com/photo-1552321554-5fefe8c9ef14?w=400&h=300&fit=crop',
+  },
+  { 
+    id: 'balcony', 
+    name: 'Balcony', 
+    image: 'https://images.unsplash.com/photo-1600607687939-ce8a6c25118c?w=400&h=300&fit=crop',
+  },
 ];
 
 export default function HomePage() {
-  const [materials, setMaterials] = useState([]);
-  const materialSliderRef = useRef(null);
-  const [canScrollLeft, setCanScrollLeft] = useState(false);
-  const [canScrollRight, setCanScrollRight] = useState(false);
+  const [selectedMaterial, setSelectedMaterial] = useState('all');
+  const [selectedStyle, setSelectedStyle] = useState('all');
+  const [showFilterModal, setShowFilterModal] = useState(false);
+  const [designs, setDesigns] = useState([]);
+  const [filteredDesigns, setFilteredDesigns] = useState([]);
+  const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    loadMaterials();
+    loadDesigns();
   }, []);
 
   useEffect(() => {
-    checkScrollButtons();
-  }, [materials]);
+    applyFilters();
+  }, [designs, selectedMaterial, selectedStyle]);
 
-  const loadMaterials = async () => {
+  const loadDesigns = async () => {
     try {
       const { data, error } = await supabase
-        .from('materials')
+        .from('products')
         .select('*')
         .eq('is_active', true)
-        .order('display_order');
+        .order('created_at', { ascending: false })
+        .limit(20);
 
       if (error) throw error;
-      setMaterials(data || []);
+      setDesigns(data || []);
     } catch (error) {
-      console.error('Error loading materials:', error);
+      console.error('Error loading designs:', error);
+    } finally {
+      setLoading(false);
     }
   };
 
-  const scrollMaterialSlider = (direction) => {
-    if (!materialSliderRef.current) return;
-    
-    const scrollAmount = 300;
-    const newScrollLeft = materialSliderRef.current.scrollLeft + (direction === 'left' ? -scrollAmount : scrollAmount);
-    
-    materialSliderRef.current.scrollTo({
-      left: newScrollLeft,
-      behavior: 'smooth'
-    });
-  };
+  const applyFilters = () => {
+    let filtered = [...designs];
 
-  const checkScrollButtons = () => {
-    if (!materialSliderRef.current) return;
-    
-    const { scrollLeft, scrollWidth, clientWidth } = materialSliderRef.current;
-    setCanScrollLeft(scrollLeft > 0);
-    setCanScrollRight(scrollLeft < scrollWidth - clientWidth - 10);
-  };
+    if (selectedMaterial !== 'all') {
+      filtered = filtered.filter(design => design.material_type === selectedMaterial);
+    }
 
-  const handleSliderScroll = () => {
-    checkScrollButtons();
+    if (selectedStyle !== 'all') {
+      filtered = filtered.filter(design => design.style_category === selectedStyle);
+    }
+
+    setFilteredDesigns(filtered);
   };
 
   return (
     <div className="min-h-screen bg-gray-50">
       {/* Header */}
       <header className="bg-white border-b border-gray-200 sticky top-0 z-50 shadow-sm">
-        <div className="max-w-[1400px] mx-auto px-8 py-4">
+        <div className="max-w-7xl mx-auto px-4 py-4">
           <div className="flex items-center justify-between">
-            {/* Logo */}
-            <Link href="/" className="flex items-center gap-3">
-              <div className="text-2xl font-bold text-gray-900" style={{ fontFamily: 'SF Pro Display, Inter, system-ui, sans-serif' }}>
-                WALL CATALOG
-              </div>
+            <Link href="/" className="text-xl font-bold text-gray-900">
+              WALL CATALOG
             </Link>
-            
-            {/* Menu */}
-            <nav className="flex items-center gap-8">
+            <div className="flex items-center gap-4">
               <Link 
                 href="/browse" 
-                className="text-base font-medium text-gray-900 hover:text-gray-600 transition-colors"
-                style={{ fontFamily: 'SF Pro Display, Inter, system-ui, sans-serif' }}
+                className="text-sm font-medium text-gray-700 hover:text-gray-900"
               >
                 Catalog
               </Link>
               <Link 
                 href="/quote" 
-                className="px-6 py-2.5 text-base font-medium text-white bg-gray-900 hover:bg-gray-800 rounded-xl transition-all shadow-sm"
-                style={{ fontFamily: 'SF Pro Display, Inter, system-ui, sans-serif' }}
+                className="px-4 py-2 text-sm font-medium text-white bg-gray-900 hover:bg-gray-800 rounded-lg"
               >
                 Get Quote
               </Link>
-            </nav>
+            </div>
           </div>
         </div>
       </header>
 
-      <div className="max-w-[1400px] mx-auto px-8 py-12">
-        {/* Section 1: Explore By Space */}
-        <section className="mb-16">
-          <h2 className="text-3xl font-bold text-gray-900 mb-8" style={{ fontFamily: 'SF Pro Display, Inter, system-ui, sans-serif' }}>
-            Explore By Space
-          </h2>
-          <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-6">
+      {/* Sticky Filter Bar */}
+      <div className="bg-white border-b border-gray-200 sticky top-[73px] z-40">
+        {/* Material Type Tabs */}
+        <div className="border-b border-gray-200">
+          <div className="max-w-7xl mx-auto px-4">
+            <div className="flex overflow-x-auto scrollbar-hide">
+              {MATERIAL_TYPES.map((material) => (
+                <button
+                  key={material.id}
+                  onClick={() => setSelectedMaterial(material.id)}
+                  className={`px-6 py-4 font-semibold whitespace-nowrap transition-all ${
+                    selectedMaterial === material.id
+                      ? 'border-b-2 border-black text-black'
+                      : 'text-gray-600 hover:text-gray-900'
+                  }`}
+                >
+                  {material.name}
+                </button>
+              ))}
+            </div>
+          </div>
+        </div>
+
+        {/* Style Filter Pills */}
+        <div className="max-w-7xl mx-auto px-4 py-3">
+          <div className="flex items-center gap-3 overflow-x-auto scrollbar-hide">
+            <button
+              onClick={() => setShowFilterModal(!showFilterModal)}
+              className="flex items-center gap-2 px-4 py-2 border-2 border-gray-300 rounded-full font-semibold text-gray-700 hover:border-gray-400 transition-all whitespace-nowrap flex-shrink-0"
+            >
+              <Filter className="w-4 h-4" />
+              Filter
+            </button>
+
+            {STYLE_FILTERS.map((style) => (
+              <button
+                key={style.id}
+                onClick={() => setSelectedStyle(style.id)}
+                className={`px-5 py-2 rounded-full font-semibold whitespace-nowrap transition-all flex-shrink-0 ${
+                  selectedStyle === style.id
+                    ? 'bg-black text-white'
+                    : 'bg-white border-2 border-gray-300 text-gray-700 hover:border-gray-400'
+                }`}
+              >
+                {style.name}
+              </button>
+            ))}
+          </div>
+        </div>
+      </div>
+
+      {/* Filter Modal */}
+      {showFilterModal && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 z-50 flex items-center justify-center p-4">
+          <div className="bg-white rounded-2xl shadow-2xl max-w-md w-full max-h-[80vh] overflow-y-auto">
+            <div className="p-6 border-b border-gray-200 flex justify-between items-center sticky top-0 bg-white">
+              <h3 className="text-xl font-bold">Filters</h3>
+              <button
+                onClick={() => setShowFilterModal(false)}
+                className="p-2 hover:bg-gray-100 rounded-lg"
+              >
+                ✕
+              </button>
+            </div>
+
+            <div className="p-6 space-y-6">
+              <div>
+                <h4 className="font-bold text-gray-900 mb-3">Material Type</h4>
+                <div className="space-y-2">
+                  {MATERIAL_TYPES.map((material) => (
+                    <button
+                      key={material.id}
+                      onClick={() => setSelectedMaterial(material.id)}
+                      className={`w-full text-left px-4 py-3 rounded-lg font-semibold transition-all ${
+                        selectedMaterial === material.id
+                          ? 'bg-blue-600 text-white'
+                          : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+                      }`}
+                    >
+                      {material.name}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              <div>
+                <h4 className="font-bold text-gray-900 mb-3">Style</h4>
+                <div className="space-y-2">
+                  {STYLE_FILTERS.map((style) => (
+                    <button
+                      key={style.id}
+                      onClick={() => setSelectedStyle(style.id)}
+                      className={`w-full text-left px-4 py-3 rounded-lg font-semibold transition-all ${
+                        selectedStyle === style.id
+                          ? 'bg-blue-600 text-white'
+                          : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+                      }`}
+                    >
+                      {style.name}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            </div>
+
+            <div className="p-6 border-t border-gray-200 flex gap-3">
+              <button
+                onClick={() => {
+                  setSelectedMaterial('all');
+                  setSelectedStyle('all');
+                }}
+                className="flex-1 px-4 py-3 bg-gray-100 text-gray-700 rounded-lg font-semibold hover:bg-gray-200"
+              >
+                Clear All
+              </button>
+              <button
+                onClick={() => setShowFilterModal(false)}
+                className="flex-1 px-4 py-3 bg-blue-600 text-white rounded-lg font-semibold hover:bg-blue-700"
+              >
+                Apply Filters
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Active Filter Badge */}
+      {(selectedMaterial !== 'all' || selectedStyle !== 'all') && (
+        <div className="bg-blue-50 border-b border-blue-100">
+          <div className="max-w-7xl mx-auto px-4 py-2">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-2 text-sm">
+                <span className="font-semibold text-blue-900">
+                  {filteredDesigns.length} designs found
+                </span>
+                {selectedMaterial !== 'all' && (
+                  <span className="px-3 py-1 bg-blue-600 text-white rounded-full text-xs font-semibold">
+                    {selectedMaterial}
+                  </span>
+                )}
+                {selectedStyle !== 'all' && (
+                  <span className="px-3 py-1 bg-blue-600 text-white rounded-full text-xs font-semibold">
+                    {selectedStyle}
+                  </span>
+                )}
+              </div>
+              <button
+                onClick={() => {
+                  setSelectedMaterial('all');
+                  setSelectedStyle('all');
+                }}
+                className="text-sm text-blue-600 hover:text-blue-700 font-semibold"
+              >
+                Clear All
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      <div className="max-w-7xl mx-auto px-4 py-8">
+        {/* Explore By Space */}
+        <section className="mb-12">
+          <h2 className="text-2xl font-bold text-gray-900 mb-6">Explore By Space</h2>
+          <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-4">
             {SPACE_CATEGORIES.map((space) => (
               <Link
                 key={space.id}
-                href={`/area/${space.id}`}
-                className="group relative overflow-hidden rounded-2xl shadow-md hover:shadow-2xl transition-all duration-300 hover:scale-105"
+                href={`/designs?space=${space.id}`}
+                className="group relative overflow-hidden rounded-xl shadow-md hover:shadow-xl transition-all duration-300"
               >
                 <div className="aspect-[4/3] relative">
                   <img
@@ -146,10 +324,10 @@ export default function HomePage() {
                       e.target.src = 'https://via.placeholder.com/400x300?text=' + space.name;
                     }}
                   />
-                  <div className="absolute inset-0 bg-gradient-to-t from-black/70 via-black/20 to-transparent"></div>
+                  <div className="absolute inset-0 bg-gradient-to-t from-black/60 via-black/20 to-transparent"></div>
                 </div>
-                <div className="absolute bottom-0 left-0 right-0 p-4">
-                  <h3 className="text-base font-semibold text-white text-center" style={{ fontFamily: 'SF Pro Display, Inter, system-ui, sans-serif' }}>
+                <div className="absolute bottom-0 left-0 right-0 p-3">
+                  <h3 className="text-sm font-semibold text-white text-center">
                     {space.name}
                   </h3>
                 </div>
@@ -158,117 +336,97 @@ export default function HomePage() {
           </div>
         </section>
 
-        {/* Section 2: Explore By All Looks (Material Slider) */}
-        <section className="mb-16">
-          <h2 className="text-3xl font-bold text-gray-900 mb-8" style={{ fontFamily: 'SF Pro Display, Inter, system-ui, sans-serif' }}>
-            Explore By All Looks
-          </h2>
-          
-          {/* Material Slider */}
-          {materials.length > 0 ? (
-            <div className="relative group">
-              {/* Left Scroll Button */}
-              {canScrollLeft && (
-                <button
-                  onClick={() => scrollMaterialSlider('left')}
-                  className="absolute left-0 top-1/2 -translate-y-1/2 z-10 w-12 h-12 bg-white shadow-xl rounded-full flex items-center justify-center hover:bg-gray-50 transition-all opacity-0 group-hover:opacity-100"
-                  style={{ marginLeft: '-24px' }}
-                >
-                  <ChevronLeft className="w-6 h-6 text-gray-700" />
-                </button>
-              )}
+        {/* Wall Panel Designs */}
+        <section>
+          <div className="flex items-center justify-between mb-6">
+            <h2 className="text-2xl font-bold text-gray-900">
+              {selectedMaterial !== 'all' || selectedStyle !== 'all' 
+                ? 'Filtered Designs' 
+                : 'All Wall Panel Designs'}
+            </h2>
+            <Link 
+              href="/designs" 
+              className="text-sm font-semibold text-blue-600 hover:text-blue-700"
+            >
+              View All →
+            </Link>
+          </div>
 
-              {/* Slider Container */}
-              <div
-                ref={materialSliderRef}
-                onScroll={handleSliderScroll}
-                className="flex gap-6 overflow-x-auto scrollbar-hide scroll-smooth pb-4"
-                style={{
-                  scrollbarWidth: 'none',
-                  msOverflowStyle: 'none',
-                  WebkitOverflowScrolling: 'touch'
-                }}
-              >
-                {materials.map((material) => (
-                  <Link
-                    key={material.id}
-                    href={`/browse?material=${material.slug}`}
-                    className="flex-shrink-0 group/item transition-all duration-200 hover:scale-105"
-                  >
-                    <div className="flex flex-col items-center gap-3">
-                      {/* Material Thumbnail */}
-                      <div
-                        className="w-28 h-28 rounded-2xl shadow-md overflow-hidden transition-all duration-200 group-hover/item:shadow-xl"
-                        style={{ backgroundColor: material.color_code }}
-                      >
-                        {material.thumbnail_url ? (
-                          <img
-                            src={material.thumbnail_url}
-                            alt={material.name}
-                            className="w-full h-full object-cover"
-                            onError={(e) => {
-                              e.target.style.display = 'none';
-                            }}
-                          />
-                        ) : null}
+          {loading ? (
+            <div className="flex items-center justify-center h-64">
+              <div className="text-center">
+                <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto mb-4"></div>
+                <p className="text-gray-600">Loading designs...</p>
+              </div>
+            </div>
+          ) : filteredDesigns.length > 0 ? (
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+              {filteredDesigns.map((design) => (
+                <Link
+                  key={design.id}
+                  href={`/design-detail?id=${design.id}`}
+                  className="bg-white rounded-xl shadow-md hover:shadow-xl transition-all duration-300 overflow-hidden group"
+                >
+                  <div className="relative h-48 bg-gray-100 overflow-hidden">
+                    <img
+                      src={design.image_url || 'https://via.placeholder.com/400x300?text=Wall+Panel'}
+                      alt={design.name}
+                      className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-500"
+                      onError={(e) => {
+                        e.target.src = 'https://via.placeholder.com/400x300?text=Wall+Panel';
+                      }}
+                    />
+                    <button className="absolute top-3 right-3 w-8 h-8 bg-white rounded-full flex items-center justify-center shadow-md hover:bg-gray-100 transition-all">
+                      <Heart className="w-4 h-4 text-gray-700" />
+                    </button>
+                  </div>
+
+                  <div className="p-4">
+                    <h3 className="text-lg font-bold text-gray-900 mb-1 line-clamp-1">
+                      {design.name}
+                    </h3>
+                    <p className="text-sm text-gray-600 mb-3 line-clamp-2">
+                      {design.description || 'Premium wall panel design'}
+                    </p>
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center gap-2">
+                        {design.material_type && (
+                          <span className="px-2 py-1 bg-gray-100 text-gray-700 text-xs font-medium rounded">
+                            {design.material_type}
+                          </span>
+                        )}
                       </div>
-                      
-                      {/* Material Name */}
-                      <span 
-                        className="text-sm font-medium text-gray-700 group-hover/item:text-gray-900 transition-colors"
-                        style={{ fontFamily: 'SF Pro Display, Inter, system-ui, sans-serif' }}
-                      >
-                        {material.name}
+                      <span className="text-sm font-bold text-blue-600">
+                        ₹{design.price_per_sqft}/sq.ft
                       </span>
                     </div>
-                  </Link>
-                ))}
-              </div>
-
-              {/* Right Scroll Button */}
-              {canScrollRight && (
-                <button
-                  onClick={() => scrollMaterialSlider('right')}
-                  className="absolute right-0 top-1/2 -translate-y-1/2 z-10 w-12 h-12 bg-white shadow-xl rounded-full flex items-center justify-center hover:bg-gray-50 transition-all opacity-0 group-hover:opacity-100"
-                  style={{ marginRight: '-24px' }}
-                >
-                  <ChevronRight className="w-6 h-6 text-gray-700" />
-                </button>
-              )}
+                  </div>
+                </Link>
+              ))}
             </div>
           ) : (
-            <div className="text-center py-12 bg-white rounded-2xl border-2 border-dashed border-gray-200">
-              <p className="text-gray-500 text-sm">Loading materials...</p>
+            <div className="text-center py-16 bg-white rounded-xl border-2 border-dashed border-gray-200">
+              <div className="text-6xl mb-4">🔍</div>
+              <h3 className="text-xl font-bold text-gray-900 mb-2">
+                No designs match your filters
+              </h3>
+              <p className="text-gray-600 mb-6">
+                Try adjusting your filters to see more designs
+              </p>
+              <button
+                onClick={() => {
+                  setSelectedMaterial('all');
+                  setSelectedStyle('all');
+                }}
+                className="px-6 py-3 bg-blue-600 text-white rounded-lg font-semibold hover:bg-blue-700"
+              >
+                Clear Filters
+              </button>
             </div>
           )}
         </section>
-
-        {/* Call to Action */}
-        <section className="text-center py-16 bg-gradient-to-br from-gray-900 to-gray-800 rounded-3xl shadow-xl">
-          <h2 className="text-3xl font-bold text-white mb-4" style={{ fontFamily: 'SF Pro Display, Inter, system-ui, sans-serif' }}>
-            Ready to Transform Your Space?
-          </h2>
-          <p className="text-gray-300 mb-8 text-lg">
-            Browse our complete catalog or get a custom quote
-          </p>
-          <div className="flex items-center justify-center gap-4">
-            <Link
-              href="/browse"
-              className="px-8 py-4 bg-white text-gray-900 rounded-xl font-semibold hover:bg-gray-100 transition-all shadow-lg text-lg"
-            >
-              View All Designs
-            </Link>
-            <Link
-              href="/quote"
-              className="px-8 py-4 bg-transparent border-2 border-white text-white rounded-xl font-semibold hover:bg-white hover:text-gray-900 transition-all text-lg"
-            >
-              Get Quote
-            </Link>
-          </div>
-        </section>
       </div>
 
-      {/* Hide scrollbar globally for slider */}
       <style jsx global>{`
         .scrollbar-hide::-webkit-scrollbar {
           display: none;
