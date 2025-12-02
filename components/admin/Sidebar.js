@@ -4,14 +4,14 @@ import { usePathname } from 'next/navigation';
 import { 
   LayoutDashboard, 
   Package, 
-  Tags, 
   Filter,
   Layers,
+  Eye,
+  Home,
+  Sliders,
   FileText, 
   Mail, 
   Settings,
-  Users,
-  BarChart3,
   LogOut
 } from 'lucide-react';
 
@@ -20,14 +20,14 @@ export default function Sidebar({ onLogout }) {
 
   const menuItems = [
     { icon: LayoutDashboard, label: 'Dashboard', href: '/admin' },
-    { icon: Package, label: 'Designs', href: '/admin/products' },
+    { icon: Package, label: 'Designs Library', href: '/admin/products' },
     { icon: Layers, label: 'Materials', href: '/admin/materials' },
-    { icon: Tags, label: 'Tags', href: '/admin/tags' },
+    { icon: Eye, label: 'Looks', href: '/admin/looks' },
+    { icon: Home, label: 'Spaces', href: '/admin/spaces' },
     { icon: Filter, label: 'Filters', href: '/admin/filters' },
+    { icon: Sliders, label: 'Slider Manager', href: '/admin/slider' },
     { icon: Mail, label: 'Enquiries', href: '/admin/enquiries' },
     { icon: FileText, label: 'Quotations', href: '/admin/quotations' },
-    { icon: Users, label: 'Customers', href: '/admin/customers' },
-    { icon: BarChart3, label: 'Analytics', href: '/admin/analytics' },
     { icon: Settings, label: 'Settings', href: '/admin/settings' },
   ];
 
