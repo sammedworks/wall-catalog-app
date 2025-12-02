@@ -1,18 +1,81 @@
 'use client';
 import { useState, useEffect } from 'react';
 import Link from 'next/link';
-import { ArrowLeft, Save, Plus, Trash2, Edit2, Eye, EyeOff } from 'lucide-react';
+import { ArrowLeft, Save, Plus, Trash2, Eye, EyeOff, Image as ImageIcon } from 'lucide-react';
 
 const DEFAULT_LOOKS = [
-  { id: 'wood', name: 'Wood', color: '#8B4513', enabled: true, order: 1 },
-  { id: 'marble', name: 'Marble', color: '#F5F5F5', enabled: true, order: 2 },
-  { id: 'rattan', name: 'Rattan', color: '#D2B48C', enabled: true, order: 3 },
-  { id: 'fabric', name: 'Fabric', color: '#E6E6FA', enabled: true, order: 4 },
-  { id: 'limewash', name: 'Limewash', color: '#F0EAD6', enabled: true, order: 5 },
-  { id: 'pastel', name: 'Pastel', color: '#FFB6C1', enabled: true, order: 6 },
-  { id: 'stone', name: 'Stone', color: '#808080', enabled: true, order: 7 },
-  { id: 'gold', name: 'Gold', color: '#FFD700', enabled: true, order: 8 },
-  { id: 'traditional', name: 'Traditional', color: '#8B0000', enabled: true, order: 9 },
+  { 
+    id: 'wood', 
+    name: 'Wood', 
+    color: '#8B4513', 
+    image: 'https://images.unsplash.com/photo-1615971677499-5467cbab01c0?w=800&h=600&fit=crop',
+    enabled: true, 
+    order: 1 
+  },
+  { 
+    id: 'marble', 
+    name: 'Marble', 
+    color: '#F5F5F5', 
+    image: 'https://images.unsplash.com/photo-1615874959474-d609969a20ed?w=800&h=600&fit=crop',
+    enabled: true, 
+    order: 2 
+  },
+  { 
+    id: 'rattan', 
+    name: 'Rattan', 
+    color: '#D2B48C', 
+    image: 'https://images.unsplash.com/photo-1616486338812-3dadae4b4ace?w=800&h=600&fit=crop',
+    enabled: true, 
+    order: 3 
+  },
+  { 
+    id: 'fabric', 
+    name: 'Fabric', 
+    color: '#E6E6FA', 
+    image: 'https://images.unsplash.com/photo-1616137466211-f939a420be84?w=800&h=600&fit=crop',
+    enabled: true, 
+    order: 4 
+  },
+  { 
+    id: 'limewash', 
+    name: 'Limewash', 
+    color: '#F0EAD6', 
+    image: 'https://images.unsplash.com/photo-1615875474908-f403116f5287?w=800&h=600&fit=crop',
+    enabled: true, 
+    order: 5 
+  },
+  { 
+    id: 'pastel', 
+    name: 'Pastel', 
+    color: '#FFB6C1', 
+    image: 'https://images.unsplash.com/photo-1616486338812-3dadae4b4ace?w=800&h=600&fit=crop',
+    enabled: true, 
+    order: 6 
+  },
+  { 
+    id: 'stone', 
+    name: 'Stone', 
+    color: '#808080', 
+    image: 'https://images.unsplash.com/photo-1615971677499-5467cbab01c0?w=800&h=600&fit=crop',
+    enabled: true, 
+    order: 7 
+  },
+  { 
+    id: 'gold', 
+    name: 'Gold', 
+    color: '#FFD700', 
+    image: 'https://images.unsplash.com/photo-1600210492486-724fe5c67fb0?w=800&h=600&fit=crop',
+    enabled: true, 
+    order: 8 
+  },
+  { 
+    id: 'traditional', 
+    name: 'Traditional', 
+    color: '#8B0000', 
+    image: 'https://images.unsplash.com/photo-1616594039964-ae9021a400a0?w=800&h=600&fit=crop',
+    enabled: true, 
+    order: 9 
+  },
 ];
 
 export default function LooksManager() {
@@ -55,6 +118,7 @@ export default function LooksManager() {
       id: `look-${Date.now()}`,
       name: 'New Look',
       color: '#000000',
+      image: 'https://images.unsplash.com/photo-1615971677499-5467cbab01c0?w=800&h=600&fit=crop',
       enabled: true,
       order: looks.length + 1
     };
@@ -111,7 +175,7 @@ export default function LooksManager() {
               </Link>
               <div>
                 <h1 className="text-2xl font-bold text-gray-900">Looks Manager</h1>
-                <p className="text-sm text-gray-600">Add/edit material categories</p>
+                <p className="text-sm text-gray-600">Add/edit material categories with images</p>
               </div>
             </div>
             <div className="flex items-center gap-3">
@@ -135,7 +199,7 @@ export default function LooksManager() {
         </div>
       </header>
 
-      <main className="max-w-5xl mx-auto px-4 sm:px-6 lg:px-8 py-12">
+      <main className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 py-12">
         {/* Success Message */}
         {message && (
           <div className={`mb-6 p-4 rounded-lg ${
@@ -149,7 +213,7 @@ export default function LooksManager() {
         <div className="mb-8 bg-purple-50 border border-purple-200 rounded-xl p-6">
           <h3 className="font-bold text-purple-900 mb-2">🎨 Material Categories</h3>
           <p className="text-purple-800">
-            These looks appear in the "Explore by View" slider on the homepage. You can add, edit, reorder, or disable them.
+            These looks appear in the "Explore by View" slider on the homepage. Each look needs a name, color, and image for the slider.
           </p>
         </div>
 
@@ -163,7 +227,7 @@ export default function LooksManager() {
               }`}
             >
               <div className="p-6">
-                <div className="flex items-center gap-4">
+                <div className="flex items-start gap-4">
                   {/* Order Controls */}
                   <div className="flex flex-col gap-1">
                     <button
@@ -185,54 +249,78 @@ export default function LooksManager() {
                     </button>
                   </div>
 
-                  {/* Color Preview */}
+                  {/* Image Preview */}
                   <div className="flex-shrink-0">
-                    <div
-                      className="w-16 h-16 rounded-lg border-2 border-gray-200 shadow-sm"
-                      style={{ backgroundColor: look.color }}
-                    />
+                    <div className="w-32 h-24 rounded-lg overflow-hidden border-2 border-gray-200 shadow-sm bg-gray-100">
+                      <img
+                        src={look.image}
+                        alt={look.name}
+                        className="w-full h-full object-cover"
+                        onError={(e) => {
+                          e.target.src = `https://via.placeholder.com/320x240/${look.color.replace('#', '')}?text=${look.name}`;
+                        }}
+                      />
+                    </div>
                   </div>
 
                   {/* Look Details */}
-                  <div className="flex-1 grid grid-cols-1 md:grid-cols-3 gap-4">
-                    <div>
-                      <label className="block text-xs font-semibold text-gray-600 mb-1">
-                        Name
-                      </label>
-                      <input
-                        type="text"
-                        value={look.name}
-                        onChange={(e) => handleUpdate(look.id, 'name', e.target.value)}
-                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent"
-                      />
-                    </div>
-                    <div>
-                      <label className="block text-xs font-semibold text-gray-600 mb-1">
-                        ID (slug)
-                      </label>
-                      <input
-                        type="text"
-                        value={look.id}
-                        onChange={(e) => handleUpdate(look.id, 'id', e.target.value)}
-                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent font-mono text-sm"
-                      />
-                    </div>
-                    <div>
-                      <label className="block text-xs font-semibold text-gray-600 mb-1">
-                        Color
-                      </label>
-                      <div className="flex gap-2">
-                        <input
-                          type="color"
-                          value={look.color}
-                          onChange={(e) => handleUpdate(look.id, 'color', e.target.value)}
-                          className="w-12 h-10 border border-gray-300 rounded-lg cursor-pointer"
-                        />
+                  <div className="flex-1 space-y-4">
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                      <div>
+                        <label className="block text-xs font-semibold text-gray-600 mb-1">
+                          Name
+                        </label>
                         <input
                           type="text"
-                          value={look.color}
-                          onChange={(e) => handleUpdate(look.id, 'color', e.target.value)}
-                          className="flex-1 px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent font-mono text-sm"
+                          value={look.name}
+                          onChange={(e) => handleUpdate(look.id, 'name', e.target.value)}
+                          className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent"
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-xs font-semibold text-gray-600 mb-1">
+                          ID (slug)
+                        </label>
+                        <input
+                          type="text"
+                          value={look.id}
+                          onChange={(e) => handleUpdate(look.id, 'id', e.target.value)}
+                          className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent font-mono text-sm"
+                        />
+                      </div>
+                    </div>
+
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                      <div>
+                        <label className="block text-xs font-semibold text-gray-600 mb-1">
+                          Color
+                        </label>
+                        <div className="flex gap-2">
+                          <input
+                            type="color"
+                            value={look.color}
+                            onChange={(e) => handleUpdate(look.id, 'color', e.target.value)}
+                            className="w-12 h-10 border border-gray-300 rounded-lg cursor-pointer"
+                          />
+                          <input
+                            type="text"
+                            value={look.color}
+                            onChange={(e) => handleUpdate(look.id, 'color', e.target.value)}
+                            className="flex-1 px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent font-mono text-sm"
+                          />
+                        </div>
+                      </div>
+                      <div>
+                        <label className="block text-xs font-semibold text-gray-600 mb-1 flex items-center gap-1">
+                          <ImageIcon className="w-3 h-3" />
+                          Slider Image URL
+                        </label>
+                        <input
+                          type="url"
+                          value={look.image}
+                          onChange={(e) => handleUpdate(look.id, 'image', e.target.value)}
+                          className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent text-sm"
+                          placeholder="https://..."
                         />
                       </div>
                     </div>
