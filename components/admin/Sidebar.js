@@ -12,7 +12,9 @@ import {
   FileText, 
   Mail, 
   Settings,
-  LogOut
+  LogOut,
+  Plus,
+  ShoppingBag
 } from 'lucide-react';
 
 export default function Sidebar({ onLogout }) {
@@ -21,6 +23,8 @@ export default function Sidebar({ onLogout }) {
   const menuItems = [
     { icon: LayoutDashboard, label: 'Dashboard', href: '/admin' },
     { icon: Package, label: 'Designs Library', href: '/admin/products' },
+    { icon: Plus, label: 'Add-ons', href: '/admin/addons' },
+    { icon: ShoppingBag, label: 'Products Catalog', href: '/admin/products-catalog' },
     { icon: Layers, label: 'Materials', href: '/admin/materials' },
     { icon: Eye, label: 'Looks', href: '/admin/looks' },
     { icon: Home, label: 'Spaces', href: '/admin/spaces' },
