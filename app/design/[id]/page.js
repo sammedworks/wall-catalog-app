@@ -10,7 +10,8 @@ import {
   Minus,
   Share2,
   Heart,
-  Info
+  Info,
+  Calculator
 } from 'lucide-react';
 
 export default function PremiumDesignDetailPage() {
@@ -22,6 +23,12 @@ export default function PremiumDesignDetailPage() {
   const [selectedAddons, setSelectedAddons] = useState([]);
   const [sqft, setSqft] = useState(100);
   const [showQuoteForm, setShowQuoteForm] = useState(false);
+  const [customerDetails, setCustomerDetails] = useState({
+    name: '',
+    email: '',
+    phone: '',
+    message: ''
+  });
 
   useEffect(() => {
     loadDesignDetails();
@@ -147,6 +154,77 @@ export default function PremiumDesignDetailPage() {
     setCurrentImageIndex((prev) => (prev - 1 + images.length) % images.length);
   };
 
+  const handleQuoteSubmit = async (e) => {
+    e.preventDefault();
+
+    // Validate customer details
+    if (!customerDetails.name || !customerDetails.phone) {
+      alert('Please fill in your name and phone number');
+      return;
+    }
+
+    // Prepare quote data to pass to quotation builder
+    const quoteData = {
+      design: {
+        id: design.id,
+        name: design.name,
+        image: design.image_url,
+        basePrice: design.price_calculation_type === 'fixed' ? design.fixed_price : design.price_per_sqft,
+        pricingType: design.price_calculation_type,
+        area: sqft
+      },
+      addons: selectedAddons.map(addonId => {
+        const addon = design.addons.find(a => a.id === addonId);
+        return {
+          id: addon.id,
+          name: addon.name,
+          price: addon.custom_price || addon.price,
+          pricingType: addon.pricing_type
+        };
+      }),
+      customer: customerDetails,
+      totalPrice: calculatePrice()
+    };
+
+    // Store in localStorage to pass to quotation builder
+    localStorage.setItem('quoteData', JSON.stringify(quoteData));
+
+    // Redirect to quotation builder
+    router.push('/quotation-builder');
+  };
+
+  const handleGetDetailedQuote = () => {
+    // Prepare design data
+    const designData = {
+      design: {
+        id: design.id,
+        name: design.name,
+        image: design.image_url,
+        basePrice: design.price_calculation_type === 'fixed' ? design.fixed_price : design.price_per_sqft,
+        pricingType: design.price_calculation_type,
+        area: sqft,
+        space_category: design.space_category,
+        material_type: design.material_type
+      },
+      addons: selectedAddons.map(addonId => {
+        const addon = design.addons.find(a => a.id === addonId);
+        return {
+          id: addon.id,
+          name: addon.name,
+          price: addon.custom_price || addon.price,
+          pricingType: addon.pricing_type
+        };
+      }),
+      totalPrice: calculatePrice()
+    };
+
+    // Store in localStorage
+    localStorage.setItem('designQuoteData', JSON.stringify(designData));
+
+    // Redirect to quotation builder
+    router.push('/quotation-builder');
+  };
+
   if (loading) {
     return (
       <div className="min-h-screen bg-gray-50 flex items-center justify-center">
@@ -243,7 +321,7 @@ export default function PremiumDesignDetailPage() {
       </div>
 
       {/* Content */}
-      <div className="max-w-4xl mx-auto px-4 py-6 space-y-6">
+      <div className="max-w-4xl mx-auto px-4 py-6 space-y-6 pb-24">
         {/* Title & Description */}
         <div className="bg-white rounded-2xl shadow-sm p-6">
           <h1 className="text-3xl font-bold text-gray-900 mb-3">{design.name}</h1>
@@ -481,9 +559,11 @@ export default function PremiumDesignDetailPage() {
             </p>
           </div>
         )}
+      </div>
 
-        {/* CTA Buttons */}
-        <div className="sticky bottom-0 bg-white border-t border-gray-200 p-4 -mx-4 flex gap-3">
+      {/* CTA Buttons - Sticky */}
+      <div className="fixed bottom-0 left-0 right-0 bg-white border-t border-gray-200 p-4 shadow-lg z-40">
+        <div className="max-w-4xl mx-auto flex gap-3">
           <button
             onClick={() => router.push('/designs')}
             className="flex-1 px-6 py-4 bg-gray-100 text-gray-900 rounded-xl font-bold hover:bg-gray-200 transition-all"
@@ -491,80 +571,14 @@ export default function PremiumDesignDetailPage() {
             Browse More
           </button>
           <button
-            onClick={() => setShowQuoteForm(true)}
-            className="flex-1 px-6 py-4 bg-blue-600 text-white rounded-xl font-bold hover:bg-blue-700 transition-all shadow-lg"
+            onClick={handleGetDetailedQuote}
+            className="flex-1 px-6 py-4 bg-gradient-to-r from-blue-600 to-blue-700 text-white rounded-xl font-bold hover:from-blue-700 hover:to-blue-800 transition-all shadow-lg flex items-center justify-center gap-2"
           >
-            Get Quote
+            <Calculator className="w-5 h-5" />
+            Get Detailed Quote
           </button>
         </div>
       </div>
-
-      {/* Quote Form Modal */}
-      {showQuoteForm && (
-        <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-end md:items-center justify-center p-4">
-          <div className="bg-white rounded-t-3xl md:rounded-3xl w-full max-w-lg max-h-[90vh] overflow-y-auto">
-            <div className="p-6">
-              <div className="flex justify-between items-center mb-6">
-                <h2 className="text-2xl font-bold text-gray-900">Get Quote</h2>
-                <button
-                  onClick={() => setShowQuoteForm(false)}
-                  className="w-10 h-10 bg-gray-100 rounded-full flex items-center justify-center hover:bg-gray-200 transition-all"
-                >
-                  ×
-                </button>
-              </div>
-              
-              <div className="space-y-4">
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">Name</label>
-                  <input
-                    type="text"
-                    className="w-full px-4 py-3 border-2 border-gray-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                    placeholder="Your name"
-                  />
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">Phone</label>
-                  <input
-                    type="tel"
-                    className="w-full px-4 py-3 border-2 border-gray-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                    placeholder="Your phone number"
-                  />
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">Email</label>
-                  <input
-                    type="email"
-                    className="w-full px-4 py-3 border-2 border-gray-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                    placeholder="Your email"
-                  />
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">Message</label>
-                  <textarea
-                    rows="4"
-                    className="w-full px-4 py-3 border-2 border-gray-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                    placeholder="Tell us about your project..."
-                  ></textarea>
-                </div>
-                
-                <div className="bg-blue-50 rounded-xl p-4">
-                  <p className="text-sm text-gray-700 mb-2">
-                    <strong>Design:</strong> {design.name}
-                  </p>
-                  <p className="text-sm text-gray-700">
-                    <strong>Estimated Price:</strong> ₹{totalPrice.toLocaleString()}
-                  </p>
-                </div>
-
-                <button className="w-full px-6 py-4 bg-blue-600 text-white rounded-xl font-bold hover:bg-blue-700 transition-all">
-                  Submit Quote Request
-                </button>
-              </div>
-            </div>
-          </div>
-        </div>
-      )}
     </div>
   );
 }
